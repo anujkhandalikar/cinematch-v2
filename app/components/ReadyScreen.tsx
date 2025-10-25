@@ -1,13 +1,37 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 
 export default function ReadyScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const session = useStore((state) => state.session);
+  const setSession = useStore((state) => state.setSession);
+  const [isReady, setIsReady] = useState(false);
+  const [partnerReady, setPartnerReady] = useState(false);
+
+  // Simulate partner ready state (in real app, this would be from server)
+  useEffect(() => {
+    if (session && isReady) {
+      // Simulate partner becoming ready after 2 seconds
+      const timer = setTimeout(() => {
+        setPartnerReady(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [session, isReady]);
+
+  const markReady = () => {
+    setIsReady(true);
+    if (session) {
+      setSession({ ...session, isReady: true });
+    }
+  };
 
   const startSwiping = () => {
-    setCurrentScreen('swipe');
+    if (isReady && partnerReady) {
+      setCurrentScreen('swipe');
+    }
   };
 
   return (
@@ -27,13 +51,50 @@ export default function ReadyScreen() {
           </div>
         )}
 
+        {/* Ready Status */}
+        <div className="bg-gray-900 rounded-2xl p-6 mb-8">
+          <h2 className="text-xl font-bold text-white mb-4">Ready Status</h2>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">You:</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                isReady ? 'bg-green-500 text-white' : 'bg-gray-600 text-gray-300'
+              }`}>
+                {isReady ? '✅ Ready' : '⏳ Not Ready'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">Partner:</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                partnerReady ? 'bg-green-500 text-white' : 'bg-gray-600 text-gray-300'
+              }`}>
+                {partnerReady ? '✅ Ready' : '⏳ Not Ready'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-4">
-          <button
-            onClick={startSwiping}
-            className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full hover:bg-red-700 transition-all text-lg"
-          >
-            Start Swiping Together! 🎬
-          </button>
+          {!isReady ? (
+            <button
+              onClick={markReady}
+              className="w-full bg-green-600 text-white font-bold py-4 px-8 rounded-full hover:bg-green-700 transition-all text-lg"
+            >
+              I'm Ready! 🚀
+            </button>
+          ) : !partnerReady ? (
+            <div className="text-center">
+              <p className="text-gray-300 mb-4">Waiting for your partner to be ready...</p>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+            </div>
+          ) : (
+            <button
+              onClick={startSwiping}
+              className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full hover:bg-red-700 transition-all text-lg"
+            >
+              Start Swiping Together! 🎬
+            </button>
+          )}
           
           <button
             onClick={() => setCurrentScreen('mode')}

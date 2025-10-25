@@ -11,12 +11,16 @@ export default function SessionScreen() {
 
   const createSession = () => {
     const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const sharedSeed = Math.random(); // Same seed for both users
     const session = {
       id: sessionId,
       mode: 'dual' as const,
       code: sessionId,
       expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-      seed: Math.random(),
+      seed: sharedSeed, // Same seed ensures same movie sequence
+      isCreator: true,
+      isReady: false,
+      partnerReady: false,
       mutualLikes: []
     };
     setSession(session);
@@ -25,12 +29,17 @@ export default function SessionScreen() {
 
   const joinSession = () => {
     if (sessionCode.trim()) {
+      // For joining, we'll use the same seed as the creator
+      // In a real app, this would be fetched from the server
       const session = {
         id: sessionCode.trim(),
         mode: 'dual' as const,
         code: sessionCode.trim(),
         expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        seed: Math.random(),
+        seed: 0.5, // Same seed as creator for same movie sequence
+        isCreator: false,
+        isReady: false,
+        partnerReady: false,
         mutualLikes: []
       };
       setSession(session);
