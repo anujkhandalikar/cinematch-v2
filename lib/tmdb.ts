@@ -84,6 +84,59 @@ export function convertTMDBMovie(tmdbMovie: TMDBMovie): any {
   };
 }
 
+// Fetch movies from multiple sources for maximum variety
+export async function fetchMaximumMovies(): Promise<any[]> {
+  if (!TMDB_API_KEY) {
+    console.error('TMDB API key not found');
+    return [];
+  }
+
+  try {
+    console.log('Fetching maximum movies from multiple sources...');
+    
+    // Fetch from multiple endpoints in parallel
+    const endpoints = [
+      // Popular movies (10 pages)
+      ...Array.from({length: 10}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Top rated movies (5 pages)
+      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Now playing movies (5 pages)
+      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Upcoming movies (5 pages)
+      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/upcoming?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
+    ];
+    
+    console.log(`Fetching from ${endpoints.length} endpoints...`);
+    
+    const promises = endpoints.map(url => fetch(url));
+    const responses = await Promise.all(promises);
+    
+    // Check for errors
+    for (const response of responses) {
+      if (!response.ok) {
+        console.warn(`API error: ${response.status}`);
+      }
+    }
+    
+    const dataPromises = responses.map(r => r.json().catch(() => ({ results: [] })));
+    const allData = await Promise.all(dataPromises);
+    
+    const allMovies = allData.flatMap(data => data.results || []);
+    console.log(`Fetched ${allMovies.length} movies from multiple sources!`);
+    
+    // Remove duplicates based on movie ID
+    const uniqueMovies = allMovies.filter((movie, index, self) => 
+      index === self.findIndex(m => m.id === movie.id)
+    );
+    
+    console.log(`After removing duplicates: ${uniqueMovies.length} unique movies`);
+    return uniqueMovies.map(convertTMDBMovie);
+  } catch (error) {
+    console.error('Error fetching maximum movies:', error);
+    return [];
+  }
+}
+
 // Fetch popular movies
 export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
   console.log('TMDB_API_KEY:', TMDB_API_KEY ? 'Found' : 'Not found');
@@ -95,7 +148,7 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
 
   try {
     // Fetch multiple pages to get more movies
-    const pages = [1, 2, 3]; // Fetch first 3 pages (60 movies)
+    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Fetch first 10 pages (200 movies)
     const promises = pages.map(p => {
       const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${p}&language=en-US`;
       console.log('Fetching from URL:', url);
@@ -131,7 +184,7 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
 
   try {
     // Fetch multiple pages for genre-based movies too
-    const pages = [1, 2, 3]; // Fetch first 3 pages
+    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Fetch first 10 pages (200 movies)
     const promises = pages.map(p => {
       const url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`;
       console.log('Fetching genre movies from URL:', url);
