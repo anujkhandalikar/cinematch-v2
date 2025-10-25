@@ -17,6 +17,8 @@ export default function ShortlistScreen() {
   const displayMovies = session?.mode === 'dual' && session?.mutualLikes 
     ? session.mutualLikes
     : likedMovies.slice(0, 3);
+  
+  const hasMutualLikes = session?.mode === 'dual' && session?.mutualLikes && session.mutualLikes.length > 0;
 
   return (
     <div className="min-h-screen bg-black p-4 sm:p-6 overflow-y-auto">
@@ -28,7 +30,7 @@ export default function ShortlistScreen() {
           </h1>
           <p className="text-red-200 text-sm sm:text-base">
             {session?.mode === 'dual' 
-              ? 'Movies you both liked! 🎉' 
+              ? (hasMutualLikes ? 'Movies you both liked! 🎉' : 'No mutual matches yet — keep swiping!')
               : "Time's up — your shortlist awaits"}
           </p>
         </div>

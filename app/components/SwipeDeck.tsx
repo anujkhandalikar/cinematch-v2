@@ -13,6 +13,7 @@ export default function SwipeDeck() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const setTimer = useStore((state) => state.setTimer);
   const session = useStore((state) => state.session);
+  const setDualModeState = useStore((state) => state.setDualModeState);
 
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes in seconds
   const [hasReachedThreeLikes, setHasReachedThreeLikes] = useState(false);
@@ -49,18 +50,83 @@ export default function SwipeDeck() {
     }
   }, [likedMovies, session, hasReachedThreeLikes]);
 
+  // Check if we've reached the end of movies
+  useEffect(() => {
+    if (movies && currentMovieIndex >= movies.length) {
+      console.log('Reached end of movies, going to shortlist');
+      setCurrentScreen('shortlist');
+    }
+  }, [currentMovieIndex, movies, setCurrentScreen]);
+
   const handleSwipeRight = async () => {
     const currentMovie = movies && movies[currentMovieIndex];
+    console.log('handleSwipeRight - currentMovieIndex before:', currentMovieIndex);
+    console.log('handleSwipeRight - currentMovie:', currentMovie?.title);
+    
     if (currentMovie) {
       addLikedMovie(currentMovie);
       
-      // Single mode: check if user has 3 likes
-      if (likedMovies.length + 1 >= 3) {
+      // Update session with current user's likes
+      if (session?.mode === 'dual') {
+        const isCreator = session.isCreator;
+        const updatedSession = {
+          ...session,
+          [isCreator ? 'creatorLikes' : 'joinerLikes']: [...(isCreator ? session.creatorLikes || [] : session.joinerLikes || []), currentMovie],
+          [isCreator ? 'creatorLikesCount' : 'joinerLikesCount']: (isCreator ? session.creatorLikesCount || 0 : session.joinerLikesCount || 0) + 1
+        };
+        // Delay session update to avoid re-render issues
         setTimeout(() => {
-          setCurrentScreen('shortlist');
-        }, 500);
+          setDualModeState(updatedSession);
+        }, 0);
+        console.log('handleSwipeRight - after setDualModeState, currentMovieIndex:', currentMovieIndex);
+        
+        // Check if both users have 3+ likes
+        const creatorCount = isCreator ? (session.creatorLikesCount || 0) + 1 : (session.creatorLikesCount || 0);
+        const joinerCount = isCreator ? (session.joinerLikesCount || 0) : (session.joinerLikesCount || 0) + 1;
+        
+        if (creatorCount >= 3 && joinerCount >= 3) {
+          // Both users have 3+ likes, calculate mutual likes and show shortlist
+          const creatorLikes = isCreator ? [...(session.creatorLikes || []), currentMovie] : (session.creatorLikes || []);
+          const joinerLikes = isCreator ? (session.joinerLikes || []) : [...(session.joinerLikes || []), currentMovie];
+          
+          // Find mutual likes (movies liked by both users)
+          const mutualLikes = creatorLikes.filter(creatorMovie => 
+            joinerLikes.some(joinerMovie => joinerMovie.id === creatorMovie.id)
+          );
+          
+          // Update session with mutual likes
+          setDualModeState({
+            ...updatedSession,
+            mutualLikes: mutualLikes
+          });
+          
+          setTimeout(() => {
+            setCurrentScreen('shortlist');
+          }, 500);
+        } else {
+          // Check if we've reached the end of movies
+          if (currentMovieIndex < movies.length - 1) {
+            nextMovie();
+          } else {
+            // We've reached the end of movies, go to shortlist
+            setCurrentScreen('shortlist');
+          }
+        }
       } else {
-        nextMovie();
+        // Single mode: check if user has 3 likes
+        if (likedMovies.length + 1 >= 3) {
+          setTimeout(() => {
+            setCurrentScreen('shortlist');
+          }, 500);
+        } else {
+          // Check if we've reached the end of movies
+          if (currentMovieIndex < movies.length - 1) {
+            nextMovie();
+          } else {
+            // We've reached the end of movies, go to shortlist
+            setCurrentScreen('shortlist');
+          }
+        }
       }
     }
     // Reset swipe delta
@@ -69,7 +135,12 @@ export default function SwipeDeck() {
 
   const handleSwipeLeft = () => {
     // Skip this movie and go to next
-    nextMovie();
+    if (currentMovieIndex < movies.length - 1) {
+      nextMovie();
+    } else {
+      // We've reached the end of movies, go to shortlist
+      setCurrentScreen('shortlist');
+    }
     // Reset swipe delta
     setSwipeDelta({ x: 0, y: 0 });
   };
@@ -121,7 +192,7 @@ export default function SwipeDeck() {
     );
   }
 
-  if (!currentMovie) {
+  if (!currentMovie || currentMovieIndex >= movies.length) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="text-center">
@@ -129,6 +200,12 @@ export default function SwipeDeck() {
           <p className="text-gray-400 text-sm mt-2">
             Movies loaded: {movies.length}, Current index: {currentMovieIndex}
           </p>
+          <button
+            onClick={() => setCurrentScreen('shortlist')}
+            className="mt-4 bg-red-600 text-white font-bold py-3 px-6 rounded-full hover:bg-red-700 transition-all"
+          >
+            View Your Shortlist
+          </button>
         </div>
       </div>
     );
@@ -147,9 +224,15 @@ export default function SwipeDeck() {
           <div className="text-white font-semibold text-sm sm:text-base">
             ⏱️ {formatTime(timeLeft)}
           </div>
-          <div className="text-white font-semibold text-sm sm:text-base">
-            ❤️ {likedMovies.length}/3
-          </div>
+          {session?.mode === 'dual' ? (
+            <div className="text-white font-semibold text-sm sm:text-base">
+              ❤️ {session.isCreator ? (session.creatorLikesCount || 0) : (session.joinerLikesCount || 0)}/3
+            </div>
+          ) : (
+            <div className="text-white font-semibold text-sm sm:text-base">
+              ❤️ {likedMovies.length}/3
+            </div>
+          )}
         </div>
         
         {hasReachedThreeLikes && session?.mode !== 'dual' && (

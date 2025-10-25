@@ -47,10 +47,10 @@ export async function fetchFilteredMovies(preferences: {
       movies = genreResults.flat();
       console.log('Genre-based movies fetched:', movies.length);
     } else {
-      // If no specific genres, fetch maximum movies from all sources
-      console.log('Fetching maximum movies from all TMDB sources');
-      movies = await fetchMaximumMovies();
-      console.log('Maximum movies fetched:', movies.length);
+      // If no specific genres, fetch popular movies (more reliable)
+      console.log('Fetching popular movies from TMDB');
+      movies = await fetchPopularMovies();
+      console.log('Popular movies fetched:', movies.length);
     }
     
     // Fallback: if no movies were fetched, try trending movies

@@ -6,12 +6,13 @@ import { useStore } from '@/lib/store';
 export default function SessionScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const setSession = useStore((state) => state.setSession);
+  const preferences = useStore((state) => state.preferences);
   const [sessionCode, setSessionCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   const createSession = () => {
     const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const sharedSeed = Math.random(); // Same seed for both users
+    const sharedSeed = 0.5; // Fixed seed for consistent movie sequence
     const session = {
       id: sessionId,
       mode: 'dual' as const,
@@ -21,7 +22,8 @@ export default function SessionScreen() {
       isCreator: true,
       isReady: false,
       partnerReady: false,
-      mutualLikes: []
+      mutualLikes: [],
+      creatorPreferences: preferences // Store creator's preferences
     };
     setSession(session);
     setCurrentScreen('ready');
@@ -40,7 +42,8 @@ export default function SessionScreen() {
         isCreator: false,
         isReady: false,
         partnerReady: false,
-        mutualLikes: []
+        mutualLikes: [],
+        joinerPreferences: preferences // Store joiner's preferences
       };
       setSession(session);
       setCurrentScreen('ready');

@@ -32,6 +32,13 @@ interface Session {
   partnerReady?: boolean; // Whether partner is ready
   isReady?: boolean; // Whether this user is ready
   mutualLikes?: Movie[]; // Movies liked by both users
+  creatorPreferences?: UserPreferences; // Creator's preferences
+  joinerPreferences?: UserPreferences; // Joiner's preferences
+  combinedPreferences?: UserPreferences; // Combined preferences for both users
+  creatorLikes?: Movie[]; // Creator's liked movies
+  joinerLikes?: Movie[]; // Joiner's liked movies
+  creatorLikesCount?: number; // Creator's like count
+  joinerLikesCount?: number; // Joiner's like count
 }
 
 interface AppState {
@@ -48,11 +55,15 @@ interface AppState {
   currentMovieIndex: number;
   likedMovies: Movie[];
   setMovies: (movies: Movie[]) => void;
+  loadMovies: (movies: Movie[]) => void; // For initial loading (resets index)
   addLikedMovie: (movie: Movie) => void;
   nextMovie: () => void;
   
   // Dual mode state
   setDualModeState: (state: { partnerReady?: boolean; isReady?: boolean; mutualLikes?: Movie[] }) => void;
+  
+  // Combine preferences for dual mode
+  combinePreferences: (creatorPrefs: UserPreferences, joinerPrefs: UserPreferences) => UserPreferences;
   
   // Timer
   timerStart: Date | null;
@@ -85,7 +96,8 @@ export const useStore = create<AppState>((set) => ({
   movies: [],
   currentMovieIndex: 0,
   likedMovies: [],
-  setMovies: (movies) => set({ movies, currentMovieIndex: 0 }),
+  setMovies: (movies) => set({ movies }),
+  loadMovies: (movies) => set({ movies, currentMovieIndex: 0 }),
   addLikedMovie: (movie) => set((state) => ({ 
     likedMovies: [...state.likedMovies, movie] 
   })),
@@ -96,6 +108,12 @@ export const useStore = create<AppState>((set) => ({
   setDualModeState: (state) => set((current) => ({
     session: current.session ? { ...current.session, ...state } : null
   })),
+  
+  combinePreferences: (creatorPrefs, joinerPrefs) => ({
+    genres: [...new Set([...creatorPrefs.genres, ...joinerPrefs.genres])],
+    ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
+    adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent
+  }),
   
   timerStart: null,
   timerEnd: null,

@@ -94,34 +94,48 @@ export async function fetchMaximumMovies(): Promise<any[]> {
   try {
     console.log('Fetching maximum movies from multiple sources...');
     
-    // Fetch from multiple endpoints in parallel
+    // Use fewer, more reliable endpoints with sequential fetching to avoid rate limits
     const endpoints = [
-      // Popular movies (10 pages)
-      ...Array.from({length: 10}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Top rated movies (5 pages)
-      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Now playing movies (5 pages)
-      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Upcoming movies (5 pages)
-      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/upcoming?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
+      // Popular movies (5 pages)
+      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Top rated movies (3 pages)
+      ...Array.from({length: 3}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Now playing movies (2 pages)
+      ...Array.from({length: 2}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
     ];
     
     console.log(`Fetching from ${endpoints.length} endpoints...`);
     
-    const promises = endpoints.map(url => fetch(url));
-    const responses = await Promise.all(promises);
+    // Fetch in smaller batches to avoid rate limiting
+    const batchSize = 3;
+    const allMovies = [];
     
-    // Check for errors
-    for (const response of responses) {
-      if (!response.ok) {
-        console.warn(`API error: ${response.status}`);
+    for (let i = 0; i < endpoints.length; i += batchSize) {
+      const batch = endpoints.slice(i, i + batchSize);
+      console.log(`Fetching batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(endpoints.length/batchSize)}`);
+      
+      try {
+        const promises = batch.map(url => fetch(url));
+        const responses = await Promise.all(promises);
+        
+        const dataPromises = responses.map(r => r.json().catch(() => ({ results: [] })));
+        const batchData = await Promise.all(dataPromises);
+        
+        const batchMovies = batchData.flatMap(data => data.results || []);
+        allMovies.push(...batchMovies);
+        
+        console.log(`Batch ${Math.floor(i/batchSize) + 1} fetched ${batchMovies.length} movies`);
+        
+        // Small delay between batches to avoid rate limiting
+        if (i + batchSize < endpoints.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.warn(`Batch ${Math.floor(i/batchSize) + 1} failed:`, error);
+        // Continue with next batch
       }
     }
     
-    const dataPromises = responses.map(r => r.json().catch(() => ({ results: [] })));
-    const allData = await Promise.all(dataPromises);
-    
-    const allMovies = allData.flatMap(data => data.results || []);
     console.log(`Fetched ${allMovies.length} movies from multiple sources!`);
     
     // Remove duplicates based on movie ID
@@ -147,26 +161,39 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
   }
 
   try {
-    // Fetch multiple pages to get more movies
-    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Fetch first 10 pages (200 movies)
-    const promises = pages.map(p => {
-      const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${p}&language=en-US`;
-      console.log('Fetching from URL:', url);
-      return fetch(url);
-    });
+    // Fetch fewer pages to avoid rate limiting
+    const pages = [1, 2, 3, 4, 5]; // Fetch first 5 pages (100 movies)
+    const allMovies = [];
     
-    const responses = await Promise.all(promises);
-    
-    for (const response of responses) {
-      if (!response.ok) {
-        throw new Error(`TMDB API error: ${response.status}`);
+    // Fetch pages sequentially to avoid rate limiting
+    for (const pageNum of pages) {
+      try {
+        const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${pageNum}&language=en-US`;
+        console.log(`Fetching page ${pageNum}...`);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          console.warn(`Page ${pageNum} failed with status: ${response.status}`);
+          continue;
+        }
+        
+        const data = await response.json();
+        const movies = data.results || [];
+        allMovies.push(...movies);
+        
+        console.log(`Page ${pageNum} fetched ${movies.length} movies`);
+        
+        // Small delay between requests to avoid rate limiting
+        if (pageNum < pages.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } catch (error) {
+        console.warn(`Page ${pageNum} failed:`, error);
+        // Continue with next page
       }
     }
     
-    const dataPromises = responses.map(r => r.json());
-    const allData = await Promise.all(dataPromises);
-    
-    const allMovies = allData.flatMap(data => data.results);
     console.log('TMDB response:', allMovies.length, 'movies from', pages.length, 'pages');
     return allMovies.map(convertTMDBMovie);
   } catch (error) {

@@ -14,7 +14,7 @@ import ShortlistScreen from './components/ShortlistScreen';
 export default function Home() {
   const currentScreen = useStore((state) => state.currentScreen);
   const preferences = useStore((state) => state.preferences);
-  const setMovies = useStore((state) => state.setMovies);
+  const loadMovies = useStore((state) => state.loadMovies);
   const session = useStore((state) => state.session);
   const movies = useStore((state) => state.movies);
 
@@ -26,37 +26,44 @@ export default function Home() {
   // Load movies when session starts
   useEffect(() => {
     if (currentScreen === 'swipe') {
-      const loadMovies = async () => {
+      const loadMoviesAsync = async () => {
         try {
           console.log('Loading movies for screen:', currentScreen);
           console.log('Session:', session);
           console.log('Preferences:', preferences);
           
+          // Use combined preferences for dual mode, or individual preferences for single mode
+          const prefsToUse = session?.mode === 'dual' && session?.combinedPreferences 
+            ? session.combinedPreferences 
+            : preferences;
+          
+          console.log('Using preferences:', prefsToUse);
+          
           // Fetch movies from TMDB with preferences
-          const movies = await fetchFilteredMovies(preferences);
+          const movies = await fetchFilteredMovies(prefsToUse);
           
           // Use seed for dual mode to ensure same movie sequence, or random for single mode
           const seed = session?.seed || Math.random();
-          const filtered = filterMovies(movies, preferences, seed);
-          setMovies(filtered);
+          const filtered = filterMovies(movies, prefsToUse, seed);
+          loadMovies(filtered);
         } catch (error) {
           console.error('Error loading movies:', error);
           // Fallback to empty array if fetch fails
-          setMovies([]);
+          loadMovies([]);
         }
       };
       
       // Add a timeout to prevent infinite loading
       const timeout = setTimeout(() => {
         console.log('Movie loading timeout - setting empty array');
-        setMovies([]);
+        loadMovies([]);
       }, 10000); // 10 second timeout
       
-      loadMovies().finally(() => {
+      loadMoviesAsync().finally(() => {
         clearTimeout(timeout);
       });
     }
-  }, [currentScreen, session, preferences, setMovies]);
+  }, [currentScreen, session, preferences, loadMovies]);
 
   // Render current screen
   switch (currentScreen) {

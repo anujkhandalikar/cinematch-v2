@@ -7,6 +7,7 @@ export default function ReadyScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const session = useStore((state) => state.session);
   const setSession = useStore((state) => state.setSession);
+  const combinePreferences = useStore((state) => state.combinePreferences);
   const [isReady, setIsReady] = useState(false);
   const [partnerReady, setPartnerReady] = useState(false);
 
@@ -16,10 +17,22 @@ export default function ReadyScreen() {
       // Simulate partner becoming ready after 2 seconds
       const timer = setTimeout(() => {
         setPartnerReady(true);
+        
+        // Combine preferences when both users are ready
+        if (session.creatorPreferences && session.joinerPreferences) {
+          const combinedPrefs = combinePreferences(
+            session.creatorPreferences, 
+            session.joinerPreferences
+          );
+          setSession({
+            ...session,
+            combinedPreferences: combinedPrefs
+          });
+        }
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [session, isReady]);
+  }, [session, isReady, combinePreferences, setSession]);
 
   const markReady = () => {
     setIsReady(true);
