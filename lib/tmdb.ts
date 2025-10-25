@@ -75,7 +75,7 @@ export function convertTMDBMovie(tmdbMovie: TMDBMovie): any {
     runtime: 0, // TMDB doesn't provide runtime in search results
     rating: tmdbMovie.vote_average,
     genres: tmdbMovie.genre_ids.map(id => GENRE_MAP[id] || 'Drama').filter(genre => genre !== 'Unknown'),
-    ott: [OTT_PLATFORMS[Math.floor(Math.random() * OTT_PLATFORMS.length)]], // Random assignment for demo
+    ott: ['Netflix', 'Prime Video', 'Disney+'], // Default to popular platforms for now
     poster_url: tmdbMovie.poster_path 
       ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Image',
@@ -94,18 +94,28 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
   }
 
   try {
-    const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${page}&language=en-US`;
-    console.log('Fetching from URL:', url);
+    // Fetch multiple pages to get more movies
+    const pages = [1, 2, 3]; // Fetch first 3 pages (60 movies)
+    const promises = pages.map(p => {
+      const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${p}&language=en-US`;
+      console.log('Fetching from URL:', url);
+      return fetch(url);
+    });
     
-    const response = await fetch(url);
+    const responses = await Promise.all(promises);
     
-    if (!response.ok) {
-      throw new Error(`TMDB API error: ${response.status}`);
+    for (const response of responses) {
+      if (!response.ok) {
+        throw new Error(`TMDB API error: ${response.status}`);
+      }
     }
     
-    const data: TMDBResponse<TMDBMovie> = await response.json();
-    console.log('TMDB response:', data.results.length, 'movies');
-    return data.results.map(convertTMDBMovie);
+    const dataPromises = responses.map(r => r.json());
+    const allData = await Promise.all(dataPromises);
+    
+    const allMovies = allData.flatMap(data => data.results);
+    console.log('TMDB response:', allMovies.length, 'movies from', pages.length, 'pages');
+    return allMovies.map(convertTMDBMovie);
   } catch (error) {
     console.error('Error fetching popular movies:', error);
     return [];
@@ -120,16 +130,28 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
   }
 
   try {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&page=${page}&language=en-US&sort_by=popularity.desc`
-    );
+    // Fetch multiple pages for genre-based movies too
+    const pages = [1, 2, 3]; // Fetch first 3 pages
+    const promises = pages.map(p => {
+      const url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`;
+      console.log('Fetching genre movies from URL:', url);
+      return fetch(url);
+    });
     
-    if (!response.ok) {
-      throw new Error(`TMDB API error: ${response.status}`);
+    const responses = await Promise.all(promises);
+    
+    for (const response of responses) {
+      if (!response.ok) {
+        throw new Error(`TMDB API error: ${response.status}`);
+      }
     }
     
-    const data: TMDBResponse<TMDBMovie> = await response.json();
-    return data.results.map(convertTMDBMovie);
+    const dataPromises = responses.map(r => r.json());
+    const allData = await Promise.all(dataPromises);
+    
+    const allMovies = allData.flatMap(data => data.results);
+    console.log('Genre movies fetched:', allMovies.length, 'movies');
+    return allMovies.map(convertTMDBMovie);
   } catch (error) {
     console.error('Error fetching movies by genre:', error);
     return [];
