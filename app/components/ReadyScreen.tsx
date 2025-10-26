@@ -2,42 +2,166 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
+import { fetchFilteredMovies } from '@/lib/movies';
 
 export default function ReadyScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const session = useStore((state) => state.session);
-  const setSession = useStore((state) => state.setSession);
+  const updateSessionReady = useStore((state) => state.updateSessionReady);
+  const subscribeToRealtimeUpdates = useStore((state) => state.subscribeToRealtimeUpdates);
+  const refreshSessionState = useStore((state) => state.refreshSessionState);
   const combinePreferences = useStore((state) => state.combinePreferences);
+  const setMovies = useStore((state) => state.setMovies);
   const [isReady, setIsReady] = useState(false);
   const [partnerReady, setPartnerReady] = useState(false);
+  const [isPreloadingMovies, setIsPreloadingMovies] = useState(false);
 
-  // Simulate partner ready state (in real app, this would be from server)
+  // Subscribe to real-time updates when component mounts
   useEffect(() => {
-    if (session && isReady) {
-      // Simulate partner becoming ready after 2 seconds
-      const timer = setTimeout(() => {
-        setPartnerReady(true);
-        
-        // Combine preferences when both users are ready
+    if (session?.supabaseSession) {
+      console.log('ReadyScreen: Setting up Supabase subscriptions');
+      subscribeToRealtimeUpdates();
+      
+      // Also refresh session state immediately to get latest data
+      refreshSessionState();
+      
+      // Set up periodic refresh as backup (more frequent for better responsiveness)
+      const refreshInterval = setInterval(() => {
+        console.log('Periodic refresh: Checking session state');
+        refreshSessionState();
+      }, 2000); // Check every 2 seconds for better responsiveness
+      
+      return () => {
+        clearInterval(refreshInterval);
+        console.log('ReadyScreen: Cleaning up subscriptions');
+        const unsubscribeFromRealtimeUpdates = useStore.getState().unsubscribeFromRealtimeUpdates;
+        unsubscribeFromRealtimeUpdates();
+      };
+    } else {
+      console.log('ReadyScreen: No Supabase session, using fallback mode');
+    }
+  }, [session?.supabaseSession?.id, subscribeToRealtimeUpdates, refreshSessionState]);
+
+  // Update partner ready state based on session data
+  useEffect(() => {
+    if (session?.supabaseSession) {
+      // Supabase mode - use real-time data
+      const supabaseSession = session.supabaseSession;
+      const currentPartnerReady = session.isCreator ? supabaseSession.joiner_ready : supabaseSession.creator_ready;
+      
+      console.log('ReadyScreen: Session state update', {
+        isCreator: session.isCreator,
+        creatorReady: supabaseSession.creator_ready,
+        joinerReady: supabaseSession.joiner_ready,
+        currentPartnerReady,
+        partnerReady
+      });
+      
+      setPartnerReady(currentPartnerReady);
+      
+      // Combine preferences when both users are ready
+      if (supabaseSession.creator_ready && supabaseSession.joiner_ready) {
+        console.log('Both users ready, combining preferences');
         if (session.creatorPreferences && session.joinerPreferences) {
           const combinedPrefs = combinePreferences(
             session.creatorPreferences, 
             session.joinerPreferences
           );
-          setSession({
-            ...session,
-            combinedPreferences: combinedPrefs
-          });
+          // Update session with combined preferences
+          useStore.setState((state) => ({
+            session: state.session ? {
+              ...state.session,
+              combinedPreferences: combinedPrefs
+            } : null
+          }));
         }
-      }, 2000);
-      return () => clearTimeout(timer);
+      }
+    } else {
+      // Fallback mode - simulate partner ready after delay
+      if (isReady && !partnerReady) {
+        console.log('Fallback mode: Simulating partner ready after delay');
+        const timer = setTimeout(() => {
+          setPartnerReady(true);
+          console.log('Fallback mode: Partner is now ready');
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [session, isReady, combinePreferences, setSession]);
+  }, [session?.supabaseSession?.creator_ready, session?.supabaseSession?.joiner_ready, session?.isCreator, session?.creatorPreferences, session?.joinerPreferences, combinePreferences, isReady, partnerReady]);
 
-  const markReady = () => {
+  // Listen to store changes for partner ready state
+  useEffect(() => {
+    const unsubscribe = useStore.subscribe(
+      (state) => state.session?.supabaseSession,
+      (supabaseSession) => {
+        if (supabaseSession && session?.isCreator !== undefined) {
+          const currentPartnerReady = session.isCreator ? supabaseSession.joiner_ready : supabaseSession.creator_ready;
+          console.log('Store subscription: Partner ready state changed', {
+            isCreator: session.isCreator,
+            creatorReady: supabaseSession.creator_ready,
+            joinerReady: supabaseSession.joiner_ready,
+            currentPartnerReady
+          });
+          setPartnerReady(currentPartnerReady);
+        }
+      }
+    );
+    
+    return unsubscribe;
+  }, [session?.isCreator]);
+
+  // Preload movies when both users are ready
+  useEffect(() => {
+    if (session?.supabaseSession && 
+        session.supabaseSession.creator_ready && 
+        session.supabaseSession.joiner_ready && 
+        !isPreloadingMovies) {
+      
+      console.log('Both users ready, preloading movies...');
+      setIsPreloadingMovies(true);
+      
+      // Get combined preferences
+      const preferences = session.combinedPreferences || session.creatorPreferences || {
+        genres: [],
+        ottPlatforms: [],
+        adultContent: false
+      };
+      
+      // Preload movies in background
+      fetchFilteredMovies(preferences, (movies, isComplete) => {
+        console.log(`Preloaded ${movies.length} movies, complete: ${isComplete}`);
+        setMovies(movies);
+        
+        if (isComplete) {
+          setIsPreloadingMovies(false);
+        }
+      }).catch(error => {
+        console.error('Error preloading movies:', error);
+        setIsPreloadingMovies(false);
+      });
+    }
+  }, [session?.supabaseSession?.creator_ready, session?.supabaseSession?.joiner_ready, isPreloadingMovies, setMovies]);
+
+  const markReady = async () => {
     setIsReady(true);
-    if (session) {
-      setSession({ ...session, isReady: true });
+    if (session?.supabaseSession) {
+      // Supabase mode - update database
+      try {
+        await updateSessionReady(true);
+        console.log('Ready state updated in Supabase');
+      } catch (error) {
+        console.error('Error updating ready state:', error);
+        setIsReady(false);
+      }
+    } else {
+      // Fallback mode - just update local state
+      console.log('Fallback mode: Ready state updated locally');
+      useStore.setState((state) => ({
+        session: state.session ? {
+          ...state.session,
+          isReady: true
+        } : null
+      }));
     }
   };
 
@@ -98,14 +222,22 @@ export default function ReadyScreen() {
           ) : !partnerReady ? (
             <div className="text-center">
               <p className="text-gray-300 mb-4">Waiting for your partner to be ready...</p>
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+              {session?.supabaseSession && (
+                <button
+                  onClick={refreshSessionState}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition-all text-sm"
+                >
+                  Refresh Status
+                </button>
+              )}
             </div>
           ) : (
             <button
               onClick={startSwiping}
               className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full hover:bg-red-700 transition-all text-lg"
             >
-              Start Swiping Together! 🎬
+              {isPreloadingMovies ? 'Loading Movies...' : 'Start Swiping Together!'} 🎬
             </button>
           )}
           

@@ -22,6 +22,7 @@ export default function PreferencesScreen() {
   const [selectedGenres, setSelectedGenres] = useState<Genre[]>(preferences.genres);
   const [selectedPlatforms, setSelectedPlatforms] = useState<OTTPlatform[]>(preferences.ottPlatforms);
   const [adultContent, setAdultContent] = useState(preferences.adultContent);
+  const [releaseYear, setReleaseYear] = useState<'2025' | '2000s' | 'older' | null>(preferences.releaseYear);
 
   const handleGenreToggle = (genre: Genre) => {
     setSelectedGenres(prev => 
@@ -40,16 +41,21 @@ export default function PreferencesScreen() {
   };
 
   const handleContinue = () => {
-    setPreferences({
+    const newPreferences = {
       genres: selectedGenres,
       ottPlatforms: selectedPlatforms,
-      adultContent
-    });
+      adultContent,
+      releaseYear
+    };
+    console.log('=== SAVING PREFERENCES ===');
+    console.log('Selected release year:', releaseYear);
+    console.log('Full preferences being saved:', newPreferences);
+    setPreferences(newPreferences);
     setCurrentScreen('mode');
   };
 
   return (
-    <div className="min-h-screen bg-black p-4 sm:p-6 overflow-y-auto">
+    <div className="min-h-screen bg-black p-4 sm:p-6 overflow-y-auto pb-20">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -59,6 +65,26 @@ export default function PreferencesScreen() {
           <p className="text-red-200 text-sm sm:text-base">
             Help us find movies you'll love
           </p>
+        </div>
+
+        {/* OTT Platforms Section */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {OTT_PLATFORMS.map((platform) => (
+              <button
+                key={platform}
+                onClick={() => handlePlatformToggle(platform)}
+                className={`p-3 rounded-lg text-sm font-medium transition-all ${
+                  selectedPlatforms.includes(platform)
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                {platform}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Genres Section */}
@@ -81,21 +107,25 @@ export default function PreferencesScreen() {
           </div>
         </div>
 
-        {/* OTT Platforms Section */}
+        {/* Release Year Section */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {OTT_PLATFORMS.map((platform) => (
+          <h2 className="text-xl font-semibold text-white mb-4">Release Year</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { value: '2025', label: '2025' },
+              { value: '2000s', label: '2000s' },
+              { value: 'older', label: 'Older' }
+            ].map(({ value, label }) => (
               <button
-                key={platform}
-                onClick={() => handlePlatformToggle(platform)}
+                key={value}
+                onClick={() => setReleaseYear(releaseYear === value ? null : value as '2025' | '2000s' | 'older')}
                 className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                  selectedPlatforms.includes(platform)
+                  releaseYear === value
                     ? 'bg-red-600 text-white'
                     : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                 }`}
               >
-                {platform}
+                {label}
               </button>
             ))}
           </div>
@@ -120,12 +150,14 @@ export default function PreferencesScreen() {
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Continue Button */}
-        <div className="text-center">
+      {/* Persistent Floating Continue Button */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-sm border-t border-gray-800">
+        <div className="max-w-4xl mx-auto">
           <button
             onClick={handleContinue}
-            className="bg-red-600 text-white font-bold py-4 px-8 rounded-full text-xl hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation"
+            className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full text-xl hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation"
           >
             Continue →
           </button>

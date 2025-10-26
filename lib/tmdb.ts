@@ -17,6 +17,7 @@ export interface TMDBMovie {
   original_title: string;
   popularity: number;
   video: boolean;
+  runtime?: number;
 }
 
 export interface TMDBGenre {
@@ -66,16 +67,191 @@ export const OTT_PLATFORMS = [
   'Peacock'
 ];
 
-// Convert TMDB movie to our Movie interface
+// Assign realistic OTT platforms based on movie characteristics
+function assignOTTPlatforms(movie: TMDBMovie): string[] {
+  const platforms: string[] = [];
+  
+  // Base assignment logic - assign platforms based on movie popularity, genre, and year
+  const popularity = movie.popularity || 0;
+  const year = new Date(movie.release_date).getFullYear();
+  const genres = movie.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean);
+  
+  // Netflix - Popular movies and recent releases
+  if (popularity > 50 || year >= 2020) {
+    platforms.push('Netflix');
+  }
+  
+  // Prime Video - Broader selection, especially older movies
+  if (popularity > 20 || year < 2020) {
+    platforms.push('Prime Video');
+  }
+  
+  // Disney+ - Family-friendly content
+  if (genres.includes('Family') || genres.includes('Animation') || 
+      movie.title.toLowerCase().includes('disney') ||
+      movie.title.toLowerCase().includes('marvel') ||
+      movie.title.toLowerCase().includes('star wars')) {
+    platforms.push('Disney+');
+  }
+  
+  // HBO Max - Premium content and older classics
+  if (popularity > 100 || year < 2010 || genres.includes('Drama')) {
+    platforms.push('HBO Max');
+  }
+  
+  // Hulu - TV shows and recent releases
+  if (year >= 2015) {
+    platforms.push('Hulu');
+  }
+  
+  // Apple TV+ - High-quality, recent content
+  if (popularity > 80 && year >= 2018) {
+    platforms.push('Apple TV+');
+  }
+  
+  // Paramount+ - Paramount movies and classics
+  if (movie.title.toLowerCase().includes('paramount') || year < 2015) {
+    platforms.push('Paramount+');
+  }
+  
+  // Peacock - Universal content and older movies (more aggressive for testing)
+  if (movie.title.toLowerCase().includes('universal') || 
+      genres.includes('Comedy') || year < 2010 || 
+      Math.random() < 0.4) { // 40% chance for testing
+    platforms.push('Peacock');
+  }
+  
+  // Ensure at least one platform
+  if (platforms.length === 0) {
+    platforms.push('Prime Video'); // Default fallback
+  }
+  
+  // Randomly remove some platforms to make it more realistic
+  if (platforms.length > 3) {
+    const shuffled = platforms.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, Math.floor(Math.random() * 3) + 1);
+  }
+  
+  console.log(`OTT assignment for ${movie.title}: [${platforms.join(', ')}]`);
+  return platforms;
+}
+
+// Fetch individual movie details to get runtime
+async function fetchMovieDetails(movieId: number): Promise<number> {
+  try {
+    const response = await fetch(`${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&language=en-US`);
+    if (!response.ok) {
+      console.warn(`Failed to fetch details for movie ${movieId}: ${response.status}`);
+      return 0;
+    }
+    const data = await response.json();
+    return data.runtime || 0;
+  } catch (error) {
+    console.warn(`Error fetching details for movie ${movieId}:`, error);
+    return 0;
+  }
+}
+
+// Convert TMDB movie to our Movie interface (optimized - no runtime fetching)
 export function convertTMDBMovie(tmdbMovie: TMDBMovie): any {
+  // Estimate runtime based on genre and year for faster loading
+  const estimatedRuntime = estimateRuntime(tmdbMovie);
+  
   return {
     id: tmdbMovie.id.toString(),
     title: tmdbMovie.title,
     year: new Date(tmdbMovie.release_date).getFullYear(),
-    runtime: 0, // TMDB doesn't provide runtime in search results
-    rating: tmdbMovie.vote_average,
+    runtime: estimatedRuntime,
+    rating: parseFloat(tmdbMovie.vote_average.toFixed(1)),
     genres: tmdbMovie.genre_ids.map(id => GENRE_MAP[id] || 'Drama').filter(genre => genre !== 'Unknown'),
-    ott: ['Netflix', 'Prime Video', 'Disney+'], // Default to popular platforms for now
+    ott: assignOTTPlatforms(tmdbMovie),
+    poster_url: tmdbMovie.poster_path 
+      ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
+      : 'https://via.placeholder.com/500x750?text=No+Image',
+    synopsis: tmdbMovie.overview || 'No description available',
+    adult: tmdbMovie.adult
+  };
+}
+
+// Estimate runtime based on genre and year (much faster than API calls)
+function estimateRuntime(tmdbMovie: TMDBMovie): number {
+  const year = new Date(tmdbMovie.release_date).getFullYear();
+  const genres = tmdbMovie.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean);
+  
+  // Base runtime by genre
+  const genreRuntimes: Record<string, number> = {
+    'Action': 120,
+    'Adventure': 115,
+    'Animation': 95,
+    'Comedy': 100,
+    'Crime': 110,
+    'Documentary': 90,
+    'Drama': 105,
+    'Family': 100,
+    'Fantasy': 115,
+    'History': 130,
+    'Horror': 95,
+    'Music': 110,
+    'Mystery': 105,
+    'Romance': 100,
+    'Sci-Fi': 115,
+    'Thriller': 105,
+    'War': 125,
+    'Western': 110
+  };
+  
+  // Get average runtime for genres
+  const avgRuntime = genres.length > 0 
+    ? genres.reduce((sum, genre) => sum + (genreRuntimes[genre] || 105), 0) / genres.length
+    : 105;
+  
+  // Adjust for year (older movies tend to be longer)
+  const yearAdjustment = year < 1990 ? 10 : year < 2000 ? 5 : 0;
+  
+  return Math.round(avgRuntime + yearAdjustment);
+}
+
+// Batch fetch runtime for multiple movies
+async function batchFetchRuntimes(movieIds: number[]): Promise<Map<number, number>> {
+  const runtimeMap = new Map<number, number>();
+  const batchSize = 10; // Process 10 movies at a time to avoid rate limiting
+  
+  for (let i = 0; i < movieIds.length; i += batchSize) {
+    const batch = movieIds.slice(i, i + batchSize);
+    const promises = batch.map(async (movieId) => {
+      const runtime = await fetchMovieDetails(movieId);
+      return { movieId, runtime };
+    });
+    
+    const results = await Promise.all(promises);
+    results.forEach(({ movieId, runtime }) => {
+      runtimeMap.set(movieId, runtime);
+    });
+    
+    // Small delay between batches
+    if (i + batchSize < movieIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  return runtimeMap;
+}
+
+// Convert TMDB movie to our Movie interface with runtime
+export async function convertTMDBMovieWithRuntime(tmdbMovie: TMDBMovie): Promise<any> {
+  console.log(`Converting ${tmdbMovie.title}: runtime=${tmdbMovie.runtime}, vote_average=${tmdbMovie.vote_average}`);
+  
+  // Fetch runtime from movie details endpoint
+  const runtime = await fetchMovieDetails(tmdbMovie.id);
+  
+  return {
+    id: tmdbMovie.id.toString(),
+    title: tmdbMovie.title,
+    year: new Date(tmdbMovie.release_date).getFullYear(),
+    runtime: runtime, // Use actual runtime from movie details endpoint
+    rating: parseFloat(tmdbMovie.vote_average.toFixed(1)), // Format to 1 decimal place
+    genres: tmdbMovie.genre_ids.map(id => GENRE_MAP[id] || 'Drama').filter(genre => genre !== 'Unknown'),
+    ott: assignOTTPlatforms(tmdbMovie), // Assign realistic OTT platforms
     poster_url: tmdbMovie.poster_path 
       ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Image',
@@ -94,20 +270,22 @@ export async function fetchMaximumMovies(): Promise<any[]> {
   try {
     console.log('Fetching maximum movies from multiple sources...');
     
-    // Use fewer, more reliable endpoints with sequential fetching to avoid rate limits
+    // Use multiple endpoints with many pages to get 1000+ movies
     const endpoints = [
-      // Popular movies (5 pages)
-      ...Array.from({length: 5}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Top rated movies (3 pages)
-      ...Array.from({length: 3}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Now playing movies (2 pages)
-      ...Array.from({length: 2}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
+      // Popular movies (30 pages = 600 movies)
+      ...Array.from({length: 30}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Top rated movies (20 pages = 400 movies)
+      ...Array.from({length: 20}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Now playing movies (15 pages = 300 movies)
+      ...Array.from({length: 15}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
+      // Upcoming movies (15 pages = 300 movies)
+      ...Array.from({length: 15}, (_, i) => `${TMDB_BASE_URL}/movie/upcoming?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
     ];
     
     console.log(`Fetching from ${endpoints.length} endpoints...`);
     
     // Fetch in smaller batches to avoid rate limiting
-    const batchSize = 3;
+    const batchSize = 5;
     const allMovies = [];
     
     for (let i = 0; i < endpoints.length; i += batchSize) {
@@ -128,7 +306,7 @@ export async function fetchMaximumMovies(): Promise<any[]> {
         
         // Small delay between batches to avoid rate limiting
         if (i + batchSize < endpoints.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       } catch (error) {
         console.warn(`Batch ${Math.floor(i/batchSize) + 1} failed:`, error);
@@ -144,7 +322,12 @@ export async function fetchMaximumMovies(): Promise<any[]> {
     );
     
     console.log(`After removing duplicates: ${uniqueMovies.length} unique movies`);
-    return uniqueMovies.map(convertTMDBMovie);
+    
+    // Convert movies to optimized format (no runtime fetching)
+    const movies = uniqueMovies.map(convertTMDBMovie);
+    
+    console.log(`Movies converted: ${movies.length}`);
+    return movies;
   } catch (error) {
     console.error('Error fetching maximum movies:', error);
     return [];
@@ -161,8 +344,8 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
   }
 
   try {
-    // Fetch fewer pages to avoid rate limiting
-    const pages = [1, 2, 3, 4, 5]; // Fetch first 5 pages (100 movies)
+    // Fetch more pages to get 1000+ movies
+    const pages = Array.from({length: 50}, (_, i) => i + 1); // Fetch first 50 pages (1000+ movies)
     const allMovies = [];
     
     // Fetch pages sequentially to avoid rate limiting

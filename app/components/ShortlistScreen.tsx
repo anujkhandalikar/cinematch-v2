@@ -13,10 +13,9 @@ export default function ShortlistScreen() {
   };
 
   // Show mutual likes in dual mode, otherwise show user's likes
-  // If mutualLikes exists, show all accumulated mutual matches
   const displayMovies = session?.mode === 'dual' && session?.mutualLikes 
     ? session.mutualLikes
-    : likedMovies.slice(0, 3);
+    : likedMovies;
   
   const hasMutualLikes = session?.mode === 'dual' && session?.mutualLikes && session.mutualLikes.length > 0;
 
@@ -26,11 +25,11 @@ export default function ShortlistScreen() {
         {/* Header */}
         <div className="text-center mb-6 sm:mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-            {session?.mode === 'dual' ? 'Your Mutual Match' : 'Your Shortlist'}
+            {session?.mode === 'dual' ? 'Your Mutual Matches' : 'Your Shortlist'}
           </h1>
           <p className="text-red-200 text-sm sm:text-base">
             {session?.mode === 'dual' 
-              ? (hasMutualLikes ? 'Movies you both liked! 🎉' : 'No mutual matches yet — keep swiping!')
+              ? (hasMutualLikes ? `You both liked ${displayMovies.length} movies! 🎉` : 'No mutual matches yet — keep swiping!')
               : "Time's up — your shortlist awaits"}
           </p>
         </div>

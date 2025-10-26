@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
 import HomeScreen from './components/HomeScreen';
@@ -8,6 +8,7 @@ import PreferencesScreen from './components/PreferencesScreen';
 import ModeSelectionScreen from './components/ModeSelectionScreen';
 import SessionScreen from './components/SessionScreen';
 import ReadyScreen from './components/ReadyScreen';
+import LoadingScreen from './components/LoadingScreen';
 import SwipeDeck from './components/SwipeDeck';
 import ShortlistScreen from './components/ShortlistScreen';
 
@@ -17,27 +18,25 @@ export default function Home() {
   const loadMovies = useStore((state) => state.loadMovies);
   const session = useStore((state) => state.session);
   const movies = useStore((state) => state.movies);
+  const [isLoadingMovies, setIsLoadingMovies] = useState(false);
 
   // Debug logging
   console.log('Current screen:', currentScreen);
   console.log('Movies state:', movies?.length || 0);
   console.log('Session:', session);
 
-  // Load movies when session starts
+  // Load movies when session starts (simplified to prevent infinite loops)
   useEffect(() => {
-    if (currentScreen === 'swipe') {
+    if (currentScreen === 'swipe' && movies.length === 0 && !isLoadingMovies) {
+      console.log('Loading movies for swipe screen');
+      setIsLoadingMovies(true);
+      
       const loadMoviesAsync = async () => {
         try {
-          console.log('Loading movies for screen:', currentScreen);
-          console.log('Session:', session);
-          console.log('Preferences:', preferences);
-          
           // Use combined preferences for dual mode, or individual preferences for single mode
           const prefsToUse = session?.mode === 'dual' && session?.combinedPreferences 
             ? session.combinedPreferences 
             : preferences;
-          
-          console.log('Using preferences:', prefsToUse);
           
           // Fetch movies from TMDB with preferences
           const movies = await fetchFilteredMovies(prefsToUse);
@@ -45,25 +44,26 @@ export default function Home() {
           // Use seed for dual mode to ensure same movie sequence, or random for single mode
           const seed = session?.seed || Math.random();
           const filtered = filterMovies(movies, prefsToUse, seed);
+          
           loadMovies(filtered);
         } catch (error) {
           console.error('Error loading movies:', error);
-          // Fallback to empty array if fetch fails
           loadMovies([]);
+        } finally {
+          setIsLoadingMovies(false);
         }
       };
       
-      // Add a timeout to prevent infinite loading
-      const timeout = setTimeout(() => {
-        console.log('Movie loading timeout - setting empty array');
-        loadMovies([]);
-      }, 10000); // 10 second timeout
-      
-      loadMoviesAsync().finally(() => {
-        clearTimeout(timeout);
-      });
+      loadMoviesAsync();
     }
-  }, [currentScreen, session, preferences, loadMovies]);
+  }, [currentScreen, preferences, loadMovies, session, movies.length, isLoadingMovies]);
+
+  // Reset loading state when screen changes
+  useEffect(() => {
+    if (currentScreen !== 'swipe') {
+      setIsLoadingMovies(false);
+    }
+  }, [currentScreen]);
 
   // Render current screen
   switch (currentScreen) {
@@ -77,9 +77,11 @@ export default function Home() {
       return <SessionScreen />;
     case 'ready':
       return <ReadyScreen />;
+    case 'loading':
+      return <LoadingScreen />;
     case 'swipe':
-      // Only render SwipeDeck if movies are loaded
-      if (!movies || movies.length === 0) {
+      // Show loading screen if movies are loading or empty
+      if (isLoadingMovies || movies.length === 0) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="text-center">

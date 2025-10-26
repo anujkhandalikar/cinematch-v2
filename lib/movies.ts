@@ -7,6 +7,7 @@ import {
   GENRE_MAP,
   OTT_PLATFORMS 
 } from './tmdb';
+import { loadMoviesProgressively, getCachedMovies } from './movieCache';
 
 // Seeded random number generator for deterministic shuffling
 function seededRandom(seed: number) {
@@ -17,14 +18,22 @@ function seededRandom(seed: number) {
   };
 }
 
-// Fetch movies from TMDB based on preferences
+// Fetch movies from TMDB based on preferences (restored full functionality)
 export async function fetchFilteredMovies(preferences: {
   genres: Genre[];
   ottPlatforms: OTTPlatform[];
   adultContent: boolean;
-}): Promise<Movie[]> {
+  releaseYear?: number;
+}, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
     console.log('Fetching movies with preferences:', preferences);
+    
+    // First, try to get cached movies for instant loading
+    const cachedMovies = getCachedMovies(preferences);
+    if (cachedMovies.length > 0) {
+      onProgress?.(cachedMovies, false); // Show cached movies immediately
+    }
+    
     let movies: Movie[] = [];
     
     // If specific genres are selected, fetch movies for those genres
@@ -47,10 +56,10 @@ export async function fetchFilteredMovies(preferences: {
       movies = genreResults.flat();
       console.log('Genre-based movies fetched:', movies.length);
     } else {
-      // If no specific genres, fetch popular movies (more reliable)
-      console.log('Fetching popular movies from TMDB');
-      movies = await fetchPopularMovies();
-      console.log('Popular movies fetched:', movies.length);
+      // If no specific genres, fetch maximum movies for better variety
+      console.log('Fetching maximum movies from TMDB');
+      movies = await fetchMaximumMovies();
+      console.log('Maximum movies fetched:', movies.length);
     }
     
     // Fallback: if no movies were fetched, try trending movies
@@ -65,15 +74,27 @@ export async function fetchFilteredMovies(preferences: {
       movies = movies.filter(movie => !movie.adult);
     }
     
+    // Apply date filtering
+    if (preferences.releaseYear) {
+      movies = movies.filter(movie => movie.year >= preferences.releaseYear!);
+      console.log(`Filtered by year ${preferences.releaseYear}: ${movies.length} movies`);
+    }
+    
     // Remove duplicates based on movie ID
     const uniqueMovies = movies.filter((movie, index, self) => 
       index === self.findIndex(m => m.id === movie.id)
     );
     
+    console.log(`Final unique movies: ${uniqueMovies.length}`);
+    onProgress?.(uniqueMovies, true); // Mark as complete
+    
     return uniqueMovies;
   } catch (error) {
     console.error('Error fetching movies from TMDB:', error);
-    return [];
+    // Fallback to cached movies
+    const fallbackMovies = getCachedMovies(preferences);
+    onProgress?.(fallbackMovies, true);
+    return fallbackMovies;
   }
 }
 
@@ -111,7 +132,35 @@ export function filterMovies(movies: Movie[], preferences: {
     // OTT platform filter (lenient - if no platforms selected, show all)
     if (preferences.ottPlatforms && preferences.ottPlatforms.length > 0) {
       const hasPlatform = movie.ott.some((platform: OTTPlatform) => preferences.ottPlatforms.includes(platform));
+      console.log(`OTT filter: ${movie.title} has platforms [${movie.ott.join(', ')}], looking for [${preferences.ottPlatforms.join(', ')}], match: ${hasPlatform}`);
       if (!hasPlatform) return false;
+    }
+    
+    // Year filter
+    if (preferences.releaseYear) {
+      const movieYear = movie.year;
+      console.log(`Year filter: ${movie.title} (${movieYear}) vs ${preferences.releaseYear}`);
+      switch (preferences.releaseYear) {
+        case '2025':
+          if (movieYear !== 2025) {
+            console.log(`Filtered out ${movie.title} - not 2025 (year: ${movieYear})`);
+            return false;
+          }
+          break;
+        case '2000s':
+          if (movieYear < 2000 || movieYear > 2024) {
+            console.log(`Filtered out ${movie.title} - not in 2000s (2000-2024)`);
+            return false;
+          }
+          break;
+        case 'older':
+          if (movieYear >= 2000) {
+            console.log(`Filtered out ${movie.title} - not older than 2000 (year: ${movieYear})`);
+            return false;
+          }
+          break;
+      }
+      console.log(`✓ ${movie.title} passed year filter`);
     }
     
     return true;
@@ -119,10 +168,30 @@ export function filterMovies(movies: Movie[], preferences: {
   
   console.log('Filtered movies:', filtered.length);
 
-  // If filtering removed all movies, return original movies (just shuffle them)
+  // If filtering removed all movies, handle intelligently based on filter type
   if (filtered.length === 0) {
-    console.log('No movies after filtering, returning original movies');
-    filtered = [...movies];
+    console.log('⚠️ No movies after filtering');
+    
+    if (preferences.ottPlatforms && preferences.ottPlatforms.length > 0) {
+      // For OTT filter, if no movies found, show movies with similar platforms
+      const similarPlatforms = ['Netflix', 'Prime Video', 'Disney+', 'HBO Max', 'Hulu', 'Apple TV+', 'Paramount+', 'Peacock'];
+      const fallbackPlatforms = similarPlatforms.filter(p => !preferences.ottPlatforms.includes(p as any));
+      
+      console.log(`No movies with ${preferences.ottPlatforms.join(', ')}, showing movies with similar platforms: ${fallbackPlatforms.join(', ')}`);
+      
+      filtered = movies.filter(movie => 
+        movie.ott.some((platform: OTTPlatform) => fallbackPlatforms.includes(platform))
+      );
+      
+      if (filtered.length === 0) {
+        console.log('Still no movies, returning original movies');
+        filtered = [...movies];
+      }
+    } else {
+      // For other filters, return original movies
+      console.log('Returning original movies');
+      filtered = [...movies];
+    }
   }
 
   // Shuffle with seed if provided (for dual mode consistency)

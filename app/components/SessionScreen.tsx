@@ -5,48 +5,57 @@ import { useStore } from '@/lib/store';
 
 export default function SessionScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
-  const setSession = useStore((state) => state.setSession);
   const preferences = useStore((state) => state.preferences);
+  const createSupabaseSession = useStore((state) => state.createSupabaseSession);
+  const joinSupabaseSession = useStore((state) => state.joinSupabaseSession);
+  const createFallbackSession = useStore((state) => state.createFallbackSession);
+  const joinFallbackSession = useStore((state) => state.joinFallbackSession);
   const [sessionCode, setSessionCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [error, setError] = useState('');
 
-  const createSession = () => {
-    const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const sharedSeed = 0.5; // Fixed seed for consistent movie sequence
-    const session = {
-      id: sessionId,
-      mode: 'dual' as const,
-      code: sessionId,
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-      seed: sharedSeed, // Same seed ensures same movie sequence
-      isCreator: true,
-      isReady: false,
-      partnerReady: false,
-      mutualLikes: [],
-      creatorPreferences: preferences // Store creator's preferences
-    };
-    setSession(session);
-    setCurrentScreen('ready');
+  const createSession = async () => {
+    setIsCreating(true);
+    setError('');
+    try {
+      // Try Supabase first, fallback to local if it fails
+      try {
+        await createSupabaseSession('dual', preferences);
+        console.log('Session created with Supabase');
+      } catch (supabaseError) {
+        console.warn('Supabase failed, using fallback:', supabaseError);
+        createFallbackSession('dual', preferences);
+      }
+      setCurrentScreen('ready');
+    } catch (error) {
+      console.error('Error creating session:', error);
+      setError('Failed to create session. Please try again.');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const joinSession = () => {
-    if (sessionCode.trim()) {
-      // For joining, we'll use the same seed as the creator
-      // In a real app, this would be fetched from the server
-      const session = {
-        id: sessionCode.trim(),
-        mode: 'dual' as const,
-        code: sessionCode.trim(),
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        seed: 0.5, // Same seed as creator for same movie sequence
-        isCreator: false,
-        isReady: false,
-        partnerReady: false,
-        mutualLikes: [],
-        joinerPreferences: preferences // Store joiner's preferences
-      };
-      setSession(session);
+  const joinSession = async () => {
+    if (!sessionCode.trim()) return;
+    
+    setIsJoining(true);
+    setError('');
+    try {
+      // Try Supabase first, fallback to local if it fails
+      try {
+        await joinSupabaseSession(sessionCode.trim(), preferences);
+        console.log('Session joined with Supabase');
+      } catch (supabaseError) {
+        console.warn('Supabase failed, using fallback:', supabaseError);
+        joinFallbackSession(sessionCode.trim(), preferences);
+      }
       setCurrentScreen('ready');
+    } catch (error) {
+      console.error('Error joining session:', error);
+      setError('Failed to join session. Please check the code and try again.');
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -63,9 +72,10 @@ export default function SessionScreen() {
             <p className="text-gray-400 mb-4">Start a new session and share the code with your friend</p>
             <button
               onClick={createSession}
-              className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-full hover:bg-red-700 transition-all"
+              disabled={isCreating}
+              className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-full hover:bg-red-700 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
-              Create New Session
+              {isCreating ? 'Creating...' : 'Create New Session'}
             </button>
           </div>
 
@@ -77,21 +87,27 @@ export default function SessionScreen() {
               <input
                 type="text"
                 value={sessionCode}
-                onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
-                placeholder="Enter session code"
-                className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-full border border-gray-700 focus:border-red-500 focus:outline-none"
+                onChange={(e) => setSessionCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="Enter 6-digit code"
                 maxLength={6}
+                className="flex-1 bg-gray-800 text-white px-4 py-3 rounded-full border border-gray-700 focus:border-red-500 focus:outline-none"
               />
               <button
                 onClick={joinSession}
-                disabled={!sessionCode.trim()}
+                disabled={!sessionCode.trim() || isJoining}
                 className="bg-red-600 text-white font-bold py-3 px-6 rounded-full hover:bg-red-700 transition-all disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
-                Join
+                {isJoining ? 'Joining...' : 'Join'}
               </button>
             </div>
           </div>
         </div>
+
+        {error && (
+          <div className="mt-4 p-4 bg-red-900 text-red-200 rounded-lg">
+            {error}
+          </div>
+        )}
 
         <button
           onClick={() => setCurrentScreen('mode')}
