@@ -60,7 +60,12 @@ export default function Home() {
             
             const seed = Math.random();
             console.log('🔍 Fetching movies from TMDB for single mode...');
-            const movies = await fetchFilteredMovies(preferences);
+            // Convert preferences to match fetchFilteredMovies signature
+            const movies = await fetchFilteredMovies({
+              genres: preferences.genres,
+              ottPlatforms: preferences.ottPlatforms,
+              adultContent: preferences.adultContent,
+            });
             console.log('📥 Fetched movies:', movies.length);
             
             const filtered = filterMovies(movies, preferences, seed);
