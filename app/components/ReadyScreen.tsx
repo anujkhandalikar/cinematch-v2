@@ -15,6 +15,7 @@ export default function ReadyScreen() {
   const [isReady, setIsReady] = useState(false);
   const [partnerReady, setPartnerReady] = useState(false);
   const [isPreloadingMovies, setIsPreloadingMovies] = useState(false);
+  const [countdown, setCountdown] = useState(3);
 
   // Subscribe to real-time updates when component mounts
   useEffect(() => {
@@ -110,35 +111,34 @@ export default function ReadyScreen() {
     return unsubscribe;
   }, [session?.isCreator]);
 
-  // Auto-start game when both users are ready (after 3 seconds)
+  // Reset countdown when both users become ready
   useEffect(() => {
-    console.log('🔍 Auto-start check:', {
-      'mode': session?.mode,
-      'isReady': isReady,
-      'partnerReady': partnerReady,
-      'supabaseSession': !!session?.supabaseSession,
-      'conditionMet': session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession
-    });
-    
+    if (session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession && countdown === 3) {
+      console.log('Both users ready, resetting countdown from 3');
+      // Countdown is already 3, now it will start ticking down
+    }
+  }, [isReady, partnerReady, session?.mode, session?.supabaseSession]);
+
+  // Auto-start game when both users are ready (with live countdown)
+  useEffect(() => {
     // Only trigger if all conditions are met AND session is dual mode
     const shouldAutoStart = session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession;
     
-    if (shouldAutoStart) {
-      console.log('✅✅✅ Both users ready, starting countdown to auto-start (3 seconds)');
+    if (shouldAutoStart && countdown > 0) {
+      console.log(`⏰ Countdown: ${countdown} seconds remaining`);
       
-      const countdown = setTimeout(() => {
-        console.log('⏰⏰⏰ 3 seconds elapsed, starting game NOW ⏰⏰⏰');
-        setCurrentScreen('swipe');
-      }, 3000);
+      const timer = setTimeout(() => {
+        if (countdown > 1) {
+          setCountdown(countdown - 1);
+        } else {
+          console.log('✅✅✅ Starting game NOW!');
+          setCurrentScreen('swipe');
+        }
+      }, 1000);
       
-      return () => {
-        console.log('🧹 Cleaning up countdown');
-        clearTimeout(countdown);
-      };
-    } else {
-      console.log('❌ Auto-start conditions not met, waiting...');
+      return () => clearTimeout(timer);
     }
-  }, [isReady, partnerReady, session?.supabaseSession]);
+  }, [isReady, partnerReady, session?.supabaseSession, countdown, session?.mode, setCurrentScreen]);
 
   // Preload movies when both users are ready
   useEffect(() => {
@@ -264,11 +264,11 @@ export default function ReadyScreen() {
             </div>
           ) : (
             <div className="text-center">
-              <p className="text-white font-bold text-2xl mb-2">Game starting in 3 seconds...</p>
+              <p className="text-white font-bold text-4xl mb-4">Game starting in {countdown}...</p>
               <div className="flex justify-center gap-2 mb-4">
-                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce"></div>
-                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                <div className={`w-3 h-3 bg-red-600 rounded-full ${countdown === 3 ? 'animate-bounce' : 'opacity-50'}`}></div>
+                <div className={`w-3 h-3 bg-red-600 rounded-full ${countdown === 2 ? 'animate-bounce' : 'opacity-50'}`}></div>
+                <div className={`w-3 h-3 bg-red-600 rounded-full ${countdown === 1 ? 'animate-bounce' : 'opacity-50'}`}></div>
               </div>
             </div>
           )}
