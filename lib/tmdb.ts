@@ -293,10 +293,16 @@ export async function fetchMaximumMovies(): Promise<any[]> {
       console.log(`Fetching batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(endpoints.length/batchSize)}`);
       
       try {
-        const promises = batch.map(url => fetch(url));
+        // Track page order to ensure deterministic results
+        const promises = batch.map((url, urlIndex) => 
+          fetch(url).then(response => ({ response, urlIndex }))
+        );
         const responses = await Promise.all(promises);
         
-        const dataPromises = responses.map(r => r.json().catch(() => ({ results: [] })));
+        // Sort responses back to URL order
+        responses.sort((a, b) => a.urlIndex - b.urlIndex);
+        
+        const dataPromises = responses.map(({ response }) => response.json().catch(() => ({ results: [] })));
         const batchData = await Promise.all(dataPromises);
         
         const batchMovies = batchData.flatMap(data => data.results || []);
@@ -395,21 +401,25 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
   try {
     // Fetch multiple pages for genre-based movies too
     const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Fetch first 10 pages (200 movies)
-    const promises = pages.map(p => {
+    const promises = pages.map((p, index) => {
       const url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`;
       console.log('Fetching genre movies from URL:', url);
-      return fetch(url);
+      // Return both the fetch promise and the page number to maintain order
+      return fetch(url).then(response => ({ response, pageIndex: index }));
     });
     
     const responses = await Promise.all(promises);
     
-    for (const response of responses) {
+    for (const { response } of responses) {
       if (!response.ok) {
         throw new Error(`TMDB API error: ${response.status}`);
       }
     }
     
-    const dataPromises = responses.map(r => r.json());
+    // Sort responses back to page order by their original index
+    responses.sort((a, b) => a.pageIndex - b.pageIndex);
+    
+    const dataPromises = responses.map(({ response }) => response.json());
     const allData = await Promise.all(dataPromises);
     
     const allMovies = allData.flatMap(data => data.results);

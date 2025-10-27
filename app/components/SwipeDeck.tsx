@@ -49,6 +49,7 @@ export default function SwipeDeck() {
   const partnerLikedRef = useRef<Movie[]>([]);
   const mutualLikedRef = useRef<Movie[]>([]);
   const newMutualSinceNudgeRef = useRef(0);
+  const hasRedirectedRef = useRef(false);
   
   // Update refs when state changes
   useEffect(() => {
@@ -184,21 +185,19 @@ export default function SwipeDeck() {
         }
       }
       
-      // Check for mutuality
-      const isMutual = partnerLiked.some(movie => movie && movie.id && movie.id === currentMovie.id);
-      console.log('🔍🔍🔍 CHECKING FOR MUTUALITY 🔍🔍🔍');
-      console.log('Movie:', currentMovie.title);
-      console.log('Movie ID:', currentMovie.id);
-      console.log('Partner liked movies:', partnerLiked.map(m => m ? { title: m.title, id: m.id } : 'null/empty'));
-      console.log('Partner liked IDs:', partnerLiked.map(m => m?.id).filter(Boolean));
-      console.log('Is mutual?', isMutual);
-      
       // Also check if this movie is already in mutualLiked to prevent duplicates
       const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
       
-      // Real-time check: query Supabase to get latest partner likes
-      if (!isMutual && session?.supabaseSession && session?.userId) {
+      // Check for mutuality by querying database directly (not from local state)
+      let isMutual = false;
+      if (session?.supabaseSession && session?.userId) {
         try {
+          console.log('🔍🔍🔍 CHECKING FOR MUTUALITY IN DATABASE 🔍🔍🔍');
+          console.log('Movie:', currentMovie.title);
+          console.log('Movie ID:', currentMovie.id);
+          console.log('Session ID:', session.supabaseSession.id);
+          console.log('Current User ID:', session.userId);
+          
           const { data } = await supabase
             .from('movie_likes')
             .select('*')
@@ -206,39 +205,16 @@ export default function SwipeDeck() {
             .neq('user_id', session.userId) // Only get partner's likes
             .eq('movie_id', currentMovie.id.toString());
           
+          console.log('Partner likes for this movie from DB:', data?.length || 0);
           if (data && data.length > 0) {
-            console.log('🔍🔍 Real-time check found partner likes this movie!');
-            const isActuallyMutual = data.some((like: any) => like.movie_data?.id === currentMovie.id);
-            if (isActuallyMutual && !alreadyMutual) {
-              console.log('🎉🎉🎉 REAL-TIME MUTUAL MATCH DETECTED!');
-              // Force mutual match detection
-              const newMutualLiked = [...mutualLiked, currentMovie];
-              setMutualLiked(newMutualLiked);
-              incrementNewMutualSinceNudge();
-              const updatedValue = useStore.getState().newMutualSinceNudge;
-              
-              if (updatedValue >= 3) {
-                console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached (real-time)');
-                
-                // Save to Supabase so both users see the nudge
-                if (session?.supabaseSession) {
-                  try {
-                    await supabase
-                      .from('sessions')
-                      .update({ mutual_matches: updatedValue })
-                      .eq('id', session.supabaseSession.id);
-                    console.log('✅ Saved mutual matches count to Supabase (real-time):', updatedValue);
-                  } catch (err) {
-                    console.error('Error saving mutual matches:', err);
-                  }
-                }
-                
-                setTimeout(() => setShowNudgeModal(true), 500);
-              }
-            }
+            console.log('Partner liked IDs from DB:', data.map(l => l.user_id));
           }
+          
+          // Check if partner has liked this movie
+          isMutual = data && data.length > 0;
+          console.log('Is mutual?', isMutual);
         } catch (err) {
-          console.error('Error in real-time check:', err);
+          console.error('Error checking mutuality in database:', err);
         }
       }
       
@@ -247,39 +223,31 @@ export default function SwipeDeck() {
         const newMutualLiked = [...mutualLiked, currentMovie];
         setMutualLiked(newMutualLiked);
         
-        // Increment the counter
-        incrementNewMutualSinceNudge();
-        
-        // Read the new value from store
-        const updatedValue = useStore.getState().newMutualSinceNudge;
-        
-        console.log('Mutual match added:', {
-          movie: currentMovie.title,
-          mutualCount: newMutualLiked.length,
-          newMutualSinceNudge: updatedValue
-        });
-        
-        // Check if we should show nudge after incrementing
-        if (updatedValue >= 3) {
-          console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached');
+        // Defer all state updates to avoid React render errors
+        setTimeout(() => {
+          // Update session with mutual likes
+          setDualModeState({ mutualLikes: newMutualLiked });
           
-          // Save to Supabase so both users see the nudge
-          if (session?.supabaseSession) {
-            try {
-              await supabase
-                .from('sessions')
-                .update({ mutual_matches: updatedValue })
-                .eq('id', session.supabaseSession.id);
-              console.log('✅ Saved mutual matches count to Supabase:', updatedValue);
-            } catch (err) {
-              console.error('Error saving mutual matches:', err);
-            }
+          // Increment the counter
+          incrementNewMutualSinceNudge();
+          
+          // Read the new value from store
+          const updatedValue = useStore.getState().newMutualSinceNudge;
+          
+          console.log('Mutual match added:', {
+            movie: currentMovie.title,
+            mutualCount: newMutualLiked.length,
+            newMutualSinceNudge: updatedValue
+          });
+          
+          // Check if we should show nudge after incrementing
+          if (updatedValue >= 3) {
+            console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached');
+            setTimeout(() => {
+              setShowNudgeModal(true);
+            }, 500);
           }
-          
-          setTimeout(() => {
-            setShowNudgeModal(true);
-          }, 500);
-        }
+        }, 0);
       } else if (!isMutual) {
         console.log('Not a mutual match yet, waiting for partner to like:', currentMovie.title);
       } else if (alreadyMutual) {
@@ -318,21 +286,88 @@ export default function SwipeDeck() {
   };
 
   // Handle nudge modal actions
-  const handleNudgeAction = (action: 'shortlist' | 'continue') => {
+  const handleNudgeAction = async (action: 'shortlist' | 'continue') => {
     setShowNudgeModal(false);
     
     if (action === 'shortlist') {
       // Shortlist Now - end game for both users
+      if (session?.mode === 'dual' && session?.supabaseSession) {
+        // Broadcast to partner via Supabase realtime channel
+        try {
+          console.log('🔊 Broadcasting redirect to partner...');
+          const channel = supabase.channel(`session-redirect-${session.supabaseSession.id}`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: session.userId }
+            }
+          });
+          
+          await channel.subscribe();
+          console.log('📡 Subscribed to redirect channel');
+          
+          await channel.send({
+            type: 'broadcast',
+            event: 'redirect-to-shortlist',
+            payload: { mutualMatches: mutualLiked, timestamp: Date.now() }
+          });
+          console.log('✅ Broadcasted redirect to partner via realtime');
+          console.log('Mutual matches to show:', mutualLiked.length);
+          
+          // Unsubscribe after a delay
+          setTimeout(() => {
+            channel.unsubscribe();
+            console.log('📡 Unsubscribed from redirect channel');
+          }, 1000);
+        } catch (err) {
+          console.error('❌ Error broadcasting redirect:', err);
+        }
+      }
       setCurrentScreen('shortlist');
     } else {
-      // Keep Browsing - reset counter, continue deck
+      // Keep Browsing - reset counter and sync with partner
+      console.log('Keep browsing selected');
+      
+      if (session?.mode === 'dual' && session?.supabaseSession) {
+        // Broadcast to partner to also keep browsing
+        try {
+          console.log('🔊 Broadcasting "keep browsing" to partner...');
+          const channel = supabase.channel(`session-keep-browsing-${session.supabaseSession.id}`, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: session.userId }
+            }
+          });
+          
+          await channel.subscribe();
+          console.log('📡 Subscribed to keep browsing channel');
+          
+          await channel.send({
+            type: 'broadcast',
+            event: 'keep-browsing',
+            payload: { timestamp: Date.now() }
+          });
+          console.log('✅ Broadcasted "keep browsing" to partner');
+          
+          // Unsubscribe after a delay
+          setTimeout(() => {
+            channel.unsubscribe();
+            console.log('📡 Unsubscribed from keep browsing channel');
+          }, 1000);
+        } catch (err) {
+          console.error('❌ Error broadcasting keep browsing:', err);
+        }
+      }
+      
+      // Reset counters
       if (session?.mode === 'dual') {
         resetNewMutualSinceNudge();
+        console.log('✅ Counter reset to 0. Need 3 MORE mutual matches for next nudge.');
+        console.log('Current mutual matches:', mutualLiked.length);
       } else {
         resetNewLikesSinceNudge();
       }
       setHasLikedCurrentMovie(false);
-      console.log('Keep browsing selected, continuing with deck');
+      console.log('Continuing with deck...');
     }
   };
 
@@ -452,6 +487,13 @@ export default function SwipeDeck() {
             
             setPartnerLiked(prev => {
               console.log('Previous partnerLiked:', prev.map(m => m.title));
+              
+              // Check if this movie already exists to prevent duplicates
+              if (prev.some(m => m && m.id === partnerMovie.id)) {
+                console.log('⚠️ Partner movie already exists, skipping duplicate');
+                return prev;
+              }
+              
               const newPartnerLiked = [...prev, partnerMovie];
               console.log('✅✅✅ Updated partnerLiked:', newPartnerLiked.map(m => ({ title: m.title, id: m.id })));
               
@@ -461,46 +503,51 @@ export default function SwipeDeck() {
                 .map(m => m.id);
               const isMutual = userLikedIds.includes(partnerMovie.id);
               
+              console.log('🔍🔍🔍 SUBSCRIPTION CHECKING FOR MUTUALITY 🔍🔍🔍');
+              console.log('Partner just liked:', partnerMovie.title);
+              console.log('User liked IDs:', userLikedIds);
+              console.log('Is mutual?', isMutual);
+              
               if (isMutual) {
                 console.log('🎉🎉🎉 PARTNER LIKES FOUND MUTUAL MATCH!', partnerMovie.title);
                 const currentUserLikedMovies = userLikedRef.current;
                 const userLikedThisMovie = currentUserLikedMovies.find(m => m.id === partnerMovie.id);
                 
+                console.log('User liked this movie?', !!userLikedThisMovie);
+                console.log('Already in mutual list?', mutualLikedRef.current.some(m => m.id === partnerMovie.id));
+                
                 if (userLikedThisMovie && !mutualLikedRef.current.some(m => m.id === partnerMovie.id)) {
-                  console.log('Adding mutual match from partner like:', partnerMovie.title);
+                  console.log('✅ Adding mutual match from partner like:', partnerMovie.title);
                   setMutualLiked(prevMutual => {
                     if (prevMutual.some(m => m.id === partnerMovie.id)) {
+                      console.log('⚠️ Already mutual, skipping');
                       return prevMutual; // Already mutual
                     }
                     
-                    const newMutualLiked = [...prevMutual, partnerMovie];
+                    return [...prevMutual, partnerMovie];
+                  });
+                  
+                  // Defer state updates to avoid React render errors
+                  setTimeout(() => {
+                    // Update session with mutual likes
+                    const updatedMutual = [...mutualLikedRef.current, partnerMovie];
+                    setDualModeState({ mutualLikes: updatedMutual });
+                    
                     incrementNewMutualSinceNudge();
                     const updatedValue = useStore.getState().newMutualSinceNudge;
                     
-                    console.log('Mutual match from partner like - newMutualSinceNudge:', updatedValue);
+                    console.log('✅ Mutual match from partner like - newMutualSinceNudge:', updatedValue);
                     
                     if (updatedValue >= 3) {
                       console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached (from partner like)');
-                      
-                      // Save to Supabase so both users see the nudge
-                      if (session?.supabaseSession) {
-                        try {
-                          await supabase
-                            .from('sessions')
-                            .update({ mutual_matches: updatedValue })
-                            .eq('id', session.supabaseSession.id);
-                          console.log('✅ Saved mutual matches count to Supabase (from partner):', updatedValue);
-                        } catch (err) {
-                          console.error('Error saving mutual matches:', err);
-                        }
-                      }
-                      
                       setTimeout(() => setShowNudgeModal(true), 500);
                     }
-                    
-                    return newMutualLiked;
-                  });
+                  }, 0);
+                } else {
+                  console.log('❌ Not adding mutual match - user did not like this movie or already mutual');
                 }
+              } else {
+                console.log('Not a mutual match - user has not liked this movie yet');
               }
               
               return newPartnerLiked;
@@ -567,6 +614,59 @@ export default function SwipeDeck() {
             
             setPartnerLiked(uniqueMovies);
             console.log('✅ Updated partnerLiked from polling:', uniqueMovies.map((m: any) => ({ title: m?.title, id: m?.id })));
+            
+            // Check for retroactive mutual matches: Did user already like any of the partner's movies?
+            const currentUserLikedIds = userLikedRef.current
+              .filter(m => m && m.id)
+              .map(m => m.id);
+            
+            console.log('🔍 POLLING: Checking for retroactive mutual matches...');
+            console.log('Current user liked IDs:', currentUserLikedIds);
+            console.log('Partner liked IDs:', uniqueMovies.map((m: any) => m.id));
+            
+            const newMutualMatches = uniqueMovies.filter((partnerMovie: any) => {
+              const isMutual = currentUserLikedIds.includes(partnerMovie.id);
+              const alreadyMutual = mutualLikedRef.current.some(m => m.id === partnerMovie.id);
+              return isMutual && !alreadyMutual;
+            });
+            
+            if (newMutualMatches.length > 0) {
+              console.log('🎉 POLLING: Found retroactive mutual matches!', newMutualMatches.map((m: any) => m.title));
+              
+              // Count how many NEW matches we're adding
+              const countNewMutual = newMutualMatches.length;
+              console.log('📊 Adding', countNewMutual, 'new mutual match(es)');
+              
+              setMutualLiked(prevMutual => {
+                const newMutualLiked = [...prevMutual];
+                newMutualMatches.forEach((newMatch: any) => {
+                  if (!newMutualLiked.some(m => m.id === newMatch.id)) {
+                    console.log('✅ Adding mutual match from polling:', newMatch.title);
+                    newMutualLiked.push(newMatch);
+                  }
+                });
+                return newMutualLiked;
+              });
+              
+              // Defer state updates to avoid React render errors
+              setTimeout(() => {
+                // Update session with mutual likes
+                setDualModeState({ mutualLikes: [...mutualLikedRef.current, ...newMutualMatches] });
+                
+                // Increment counter ONCE for all new matches
+                for (let i = 0; i < countNewMutual; i++) {
+                  incrementNewMutualSinceNudge();
+                }
+                
+                const updatedValue = useStore.getState().newMutualSinceNudge;
+                console.log('✅ Updated mutual matches from polling - newMutualSinceNudge:', updatedValue);
+                
+                if (updatedValue >= 3) {
+                  console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached (from polling)');
+                  setTimeout(() => setShowNudgeModal(true), 500);
+                }
+              }, 0);
+            }
           }
         } catch (err) {
           console.error('Polling error:', err);
@@ -582,6 +682,89 @@ export default function SwipeDeck() {
       return () => clearInterval(interval);
     }
   }, [session?.mode, session?.supabaseSession?.id, session?.userId]);
+  
+  // Listen for partner's actions via Supabase realtime
+  useEffect(() => {
+    if (session?.mode === 'dual' && session?.supabaseSession && isSessionRunning) {
+      console.log('📡 Setting up realtime listeners for partner actions...');
+      
+      const channelConfig = {
+        broadcast: { self: true },
+        presence: { key: session.userId }
+      };
+      
+      const redirectChannel = supabase.channel(`session-redirect-${session.supabaseSession.id}`, {
+        config: channelConfig
+      });
+      
+      const keepBrowsingChannel = supabase.channel(`session-keep-browsing-${session.supabaseSession.id}`, {
+        config: channelConfig
+      });
+      
+      // Listen for partner clicking "Shortlist Now"
+      redirectChannel
+        .on('broadcast', { event: 'redirect-to-shortlist' }, (payload) => {
+          console.log('🚨 Partner clicked Shortlist Now! Payload:', payload);
+          
+          if (hasRedirectedRef.current) {
+            console.log('Already redirected, ignoring');
+            return;
+          }
+          
+          hasRedirectedRef.current = true;
+          
+          // Get mutual matches from payload or use local ones
+          const payloadMatches = payload.payload?.mutualMatches;
+          
+          setTimeout(() => {
+            if (payloadMatches && Array.isArray(payloadMatches)) {
+              console.log('Loading', payloadMatches.length, 'mutual matches from partner broadcast');
+              setDualModeState({ mutualLikes: payloadMatches });
+            } else if (mutualLiked.length > 0) {
+              console.log('Using', mutualLiked.length, 'local mutual likes');
+              setDualModeState({ mutualLikes: mutualLiked });
+            }
+            
+            setTimeout(() => {
+              console.log('✈️ Navigating to shortlist screen...');
+              setCurrentScreen('shortlist');
+            }, 100);
+          }, 0);
+        })
+        .subscribe((status) => {
+          console.log('📡 Redirect listener status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Subscribed to redirect channel');
+          }
+        });
+      
+      // Listen for partner clicking "Keep Browsing"
+      keepBrowsingChannel
+        .on('broadcast', { event: 'keep-browsing' }, (payload) => {
+          console.log('👥 Partner clicked Keep Browsing! Closing modal and resetting counter...');
+          
+          // Close the modal and reset counters
+          setShowNudgeModal(false);
+          resetNewMutualSinceNudge();
+          setHasLikedCurrentMovie(false);
+          
+          console.log('✅ Partner keep browsing handled, both users continuing with deck');
+          console.log('Counter reset to 0. Next nudge after 3 MORE mutual matches.');
+        })
+        .subscribe((status) => {
+          console.log('📡 Keep browsing listener status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Subscribed to keep browsing channel');
+          }
+        });
+      
+      return () => {
+        console.log('Cleaning up realtime listeners');
+        redirectChannel.unsubscribe();
+        keepBrowsingChannel.unsubscribe();
+      };
+    }
+  }, [session?.mode, session?.supabaseSession?.id, isSessionRunning, setCurrentScreen, setDualModeState, mutualLiked.length, resetNewMutualSinceNudge, setShowNudgeModal, setHasLikedCurrentMovie, session?.userId]);
 
   // Watch for shared newMutualSinceNudge changes across both users
   useEffect(() => {

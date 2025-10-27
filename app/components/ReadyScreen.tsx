@@ -140,14 +140,16 @@ export default function ReadyScreen() {
     }
   }, [isReady, partnerReady, session?.supabaseSession, countdown, session?.mode, setCurrentScreen]);
 
-  // Preload movies when both users are ready
+  // Preload movies when both users are ready (ONLY for single mode)
+  // For dual mode, let the swipe screen handle deck creation and sharing
   useEffect(() => {
     if (session?.supabaseSession && 
         session.supabaseSession.creator_ready && 
         session.supabaseSession.joiner_ready && 
-        !isPreloadingMovies) {
+        !isPreloadingMovies &&
+        session.mode === 'single') {  // ONLY preload for single mode
       
-      console.log('Both users ready, preloading movies...');
+      console.log('Both users ready, preloading movies for single mode...');
       setIsPreloadingMovies(true);
       
       // Get combined preferences
@@ -169,8 +171,10 @@ export default function ReadyScreen() {
         console.error('Error preloading movies:', error);
         setIsPreloadingMovies(false);
       });
+    } else if (session?.mode === 'dual') {
+      console.log('Dual mode: Skipping preload. Swipe screen will handle deck creation.');
     }
-  }, [session?.supabaseSession?.creator_ready, session?.supabaseSession?.joiner_ready, isPreloadingMovies, setMovies]);
+  }, [session?.supabaseSession?.creator_ready, session?.supabaseSession?.joiner_ready, isPreloadingMovies, setMovies, session?.mode]);
 
   const markReady = async () => {
     setIsReady(true);
