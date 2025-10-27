@@ -430,7 +430,7 @@ export default function SwipeDeck() {
       <div className="flex justify-between items-center p-4">
         <div className="text-white font-semibold text-sm sm:text-base">
           {session?.mode === 'dual' ? (
-            <>💕 {mutualLiked.length} mutual</>
+            <>❤️ {mutualLiked.length} mutual</>
           ) : (
             <>❤️ {likedMovies.length}</>
           )}
