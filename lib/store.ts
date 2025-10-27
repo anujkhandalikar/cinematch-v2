@@ -164,7 +164,8 @@ export const useStore = create<AppState>((set) => ({
   combinePreferences: (creatorPrefs, joinerPrefs) => ({
     genres: [...new Set([...creatorPrefs.genres, ...joinerPrefs.genres])],
     ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
-    adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent
+    adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
+    releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null
   }),
   
   timerStart: null,
