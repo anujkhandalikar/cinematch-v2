@@ -182,10 +182,41 @@ export default function SwipeDeck() {
       console.log('Partner liked movies:', partnerLiked.map(m => ({ title: m.title, id: m.id })));
       console.log('Partner liked IDs:', partnerLiked.map(m => m.id));
       console.log('Is mutual?', isMutual);
-      console.log('Comparison:', partnerLiked.map(m => `${m.title} (${m.id}) === ${currentMovie.title} (${currentMovie.id})? ${m.id === currentMovie.id}`));
       
       // Also check if this movie is already in mutualLiked to prevent duplicates
       const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
+      
+      // Real-time check: query Supabase to get latest partner likes
+      if (!isMutual && session?.supabaseSession && session?.userId) {
+        try {
+          const { data } = await supabase
+            .from('movie_likes')
+            .select('*')
+            .eq('session_id', session.supabaseSession.id)
+            .neq('user_id', session.userId) // Only get partner's likes
+            .eq('movie_id', currentMovie.id.toString());
+          
+          if (data && data.length > 0) {
+            console.log('🔍🔍 Real-time check found partner likes this movie!');
+            const isActuallyMutual = data.some((like: any) => like.movie_data?.id === currentMovie.id);
+            if (isActuallyMutual && !alreadyMutual) {
+              console.log('🎉🎉🎉 REAL-TIME MUTUAL MATCH DETECTED!');
+              // Force mutual match detection
+              const newMutualLiked = [...mutualLiked, currentMovie];
+              setMutualLiked(newMutualLiked);
+              incrementNewMutualSinceNudge();
+              const updatedValue = useStore.getState().newMutualSinceNudge;
+              
+              if (updatedValue >= 3) {
+                console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached (real-time)');
+                setTimeout(() => setShowNudgeModal(true), 500);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error in real-time check:', err);
+        }
+      }
       
       if (isMutual && !alreadyMutual) {
         console.log('🎉 MUTUAL MATCH FOUND:', currentMovie.title);
@@ -390,11 +421,11 @@ export default function SwipeDeck() {
           if (status === 'SUBSCRIBED') {
             console.log('✅ Successfully subscribed to partner likes!');
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ Channel error');
+            console.log('⚠️ Channel error');
           } else if (status === 'TIMED_OUT') {
-            console.error('❌ Subscription timed out');
+            console.log('⚠️ Subscription timed out');
           } else if (status === 'CLOSED') {
-            console.error('❌ Subscription closed');
+            console.log('⚠️ Subscription closed (this is normal during cleanup)');
           }
         });
       
