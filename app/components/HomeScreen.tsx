@@ -64,62 +64,64 @@ export default function HomeScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="text-center max-w-2xl">
-        {/* Logo/Title */}
-        <div className="mb-8">
-          <h1 className="text-6xl sm:text-8xl font-bold text-white mb-4">
-            🎬
-          </h1>
-          <h2 className="text-4xl sm:text-6xl font-bold text-white mb-4">
-            Cinematch
-          </h2>
-          <p className="text-xl sm:text-2xl text-red-200">
-            Find your perfect movie match
-          </p>
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      <div className="text-center max-w-md w-full">
+        {/* Logo/Icon */}
+        <div className="mb-6">
+          <div className="text-6xl">🎬</div>
         </div>
 
-        {/* Description */}
-        <div className="mb-12">
-          <p className="text-lg sm:text-xl text-gray-300 mb-6">
-            Swipe through thousands of movies and discover your next favorite film. 
-            Match with friends or go solo - the choice is yours!
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center text-sm text-gray-400">
-            <div className="flex items-center gap-2">
-              <span className="text-red-500">🎯</span>
-              <span>Personalized recommendations</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-red-500">👥</span>
-              <span>Dual mode with friends</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-red-500">📱</span>
-              <span>Mobile-first design</span>
-            </div>
-          </div>
-        </div>
+        {/* Title */}
+        <h1 className="text-5xl sm:text-6xl font-bold text-white mb-2">
+          Cinematch
+        </h1>
+
+        {/* Tagline */}
+        <p className="text-lg sm:text-xl text-white italic mb-8">
+          Swipe. Match. Watch.
+        </p>
 
         {/* CTA Button */}
         <button
           onClick={() => setCurrentScreen('preferences')}
-          className="bg-red-600 text-white font-bold py-4 px-8 rounded-full text-xl hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation shadow-2xl"
+          className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation flex items-center justify-center gap-2 mb-4"
         >
-          Start Matching →
+          Start Matching
+          <span>→</span>
         </button>
+
+        {/* Match Options */}
+        <p className="text-sm text-white mb-8">
+          Match solo • Match with friends
+        </p>
+
+        {/* Features List */}
+        <div className="flex flex-col gap-3 items-start mb-8">
+          <div className="flex items-center gap-2 text-white">
+            <span>🎯</span>
+            <span>Personalized picks</span>
+          </div>
+          <div className="flex items-center gap-2 text-white">
+            <span>🎭</span>
+            <span>Curated for every mood</span>
+          </div>
+          <div className="flex items-center gap-2 text-white">
+            <span>📱</span>
+            <span>Built for mobile</span>
+          </div>
+        </div>
 
         {/* Debug Button */}
         <button
           onClick={debugMovieData}
-          className="mt-4 bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-gray-500 transition-all"
+          className="w-full bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg text-sm hover:bg-gray-600 transition-all mb-12"
         >
           🔍 Debug Movie Data
         </button>
 
         {/* Footer */}
-        <div className="mt-12 text-sm text-gray-500">
-          <p>Powered by TMDB • Thousands of movies and TV shows</p>
+        <div className="text-xs text-gray-400">
+          <p>Powered by TMDB — Your gateway to the world's cinema.</p>
         </div>
       </div>
     </div>
