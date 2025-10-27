@@ -103,6 +103,10 @@ interface AppState {
   unsubscribeFromRealtimeUpdates: () => void;
   refreshSessionState: () => Promise<void>;
   
+  // Fallback methods (without Supabase)
+  createFallbackSession: (mode: 'single' | 'dual', preferences: UserPreferences) => void;
+  joinFallbackSession: (code: string, preferences: UserPreferences) => void;
+  
   // Reset state
   resetState: () => void;
 }
