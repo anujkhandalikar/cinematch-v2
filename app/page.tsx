@@ -140,7 +140,12 @@ export default function Home() {
           
           // Fetch movies from TMDB with preferences
           console.log('🔍 Fetching movies from TMDB...');
-          const movies = await fetchFilteredMovies(prefsToUse);
+          // Convert preferences to match fetchFilteredMovies signature
+          const movies = await fetchFilteredMovies({
+            genres: prefsToUse.genres,
+            ottPlatforms: prefsToUse.ottPlatforms,
+            adultContent: prefsToUse.adultContent,
+          });
           console.log('📥 Fetched movies:', movies.length);
           console.log('🎲 Using seed:', seed);
           console.log('🎥 First 5 movies BEFORE shuffle:', movies.slice(0, 5).map(m => m.title));
