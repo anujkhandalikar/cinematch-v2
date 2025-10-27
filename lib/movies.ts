@@ -18,7 +18,7 @@ function seededRandom(seed: number) {
   };
 }
 
-// Fetch movies from TMDB based on preferences (restored full functionality)
+// Fetch movies from TMDB based on preferences
 export async function fetchFilteredMovies(preferences: {
   genres: Genre[];
   ottPlatforms: OTTPlatform[];
@@ -26,13 +26,7 @@ export async function fetchFilteredMovies(preferences: {
   releaseYear?: number;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
-    console.log('Fetching movies with preferences:', preferences);
-    
-    // First, try to get cached movies for instant loading
-    const cachedMovies = getCachedMovies(preferences);
-    if (cachedMovies.length > 0) {
-      onProgress?.(cachedMovies, false); // Show cached movies immediately
-    }
+    console.log('Fetching movies from TMDB with preferences:', preferences);
     
     let movies: Movie[] = [];
     
@@ -85,16 +79,14 @@ export async function fetchFilteredMovies(preferences: {
       index === self.findIndex(m => m.id === movie.id)
     );
     
-    console.log(`Final unique movies: ${uniqueMovies.length}`);
-    onProgress?.(uniqueMovies, true); // Mark as complete
+    console.log(`✅ Final unique movies: ${uniqueMovies.length}`);
+    onProgress?.(uniqueMovies, true);
     
     return uniqueMovies;
   } catch (error) {
-    console.error('Error fetching movies from TMDB:', error);
-    // Fallback to cached movies
-    const fallbackMovies = getCachedMovies(preferences);
-    onProgress?.(fallbackMovies, true);
-    return fallbackMovies;
+    console.error('❌ Error fetching movies from TMDB:', error);
+    onProgress?.([], true);
+    return [];
   }
 }
 

@@ -375,7 +375,7 @@ export function getCachedMovies(preferences: {
   return movies;
 }
 
-// Progressive loading - start with cached, then enhance with API data
+// Progressive loading - fetch real TMDB data
 export async function loadMoviesProgressively(preferences: {
   genres: Genre[];
   ottPlatforms: OTTPlatform[];
@@ -383,13 +383,8 @@ export async function loadMoviesProgressively(preferences: {
   releaseYear?: number;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   
-  // Step 1: Return cached movies immediately (0ms) for instant loading
-  const cachedMovies = getCachedMovies(preferences);
-  onProgress?.(cachedMovies, false); // Mark as incomplete initially
-  
-  // Step 2: In background, fetch real TMDB data
   try {
-    console.log('Fetching real TMDB data in background...');
+    console.log('Fetching real TMDB data...');
     
     // Import TMDB functions dynamically to avoid circular imports
     const { fetchMaximumMovies, fetchTrendingMovies, fetchMoviesByGenre, GENRE_MAP } = await import('./tmdb');
@@ -444,17 +439,18 @@ export async function loadMoviesProgressively(preferences: {
     );
     
     if (uniqueMovies.length > 0) {
-      console.log(`Enhanced with ${uniqueMovies.length} real TMDB movies`);
+      console.log(`✅ Fetched ${uniqueMovies.length} real TMDB movies`);
       onProgress?.(uniqueMovies, true);
       return uniqueMovies;
     }
   } catch (error) {
-    console.warn('Failed to fetch real TMDB data, using cached:', error);
+    console.warn('Failed to fetch real TMDB data:', error);
   }
   
-  // Fallback to cached movies if API fails
-  onProgress?.(cachedMovies, true);
-  return cachedMovies;
+  // Final fallback - return empty array
+  console.warn('No movies available, returning empty array');
+  onProgress?.([], true);
+  return [];
 }
 
 // Clear cache when needed

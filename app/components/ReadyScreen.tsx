@@ -110,6 +110,20 @@ export default function ReadyScreen() {
     return unsubscribe;
   }, [session?.isCreator]);
 
+  // Auto-start game when both users are ready (after 3 seconds)
+  useEffect(() => {
+    if (session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession) {
+      console.log('Both users ready, starting countdown to auto-start');
+      
+      const countdown = setTimeout(() => {
+        console.log('3 seconds elapsed, starting game');
+        setCurrentScreen('swipe');
+      }, 3000);
+      
+      return () => clearTimeout(countdown);
+    }
+  }, [session?.mode, isReady, partnerReady, session?.supabaseSession, setCurrentScreen]);
+
   // Preload movies when both users are ready
   useEffect(() => {
     if (session?.supabaseSession && 
@@ -233,12 +247,14 @@ export default function ReadyScreen() {
               )}
             </div>
           ) : (
-            <button
-              onClick={startSwiping}
-              className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full hover:bg-red-700 transition-all text-lg"
-            >
-              {isPreloadingMovies ? 'Loading Movies...' : 'Start Swiping Together!'} 🎬
-            </button>
+            <div className="text-center">
+              <p className="text-white font-bold text-2xl mb-2">Game starting in 3 seconds...</p>
+              <div className="flex justify-center gap-2 mb-4">
+                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce"></div>
+                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
           )}
           
           <button

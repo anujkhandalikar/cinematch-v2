@@ -245,15 +245,17 @@ export default function SwipeDeck() {
     setShowNudgeModal(false);
     
     if (action === 'shortlist') {
+      // Shortlist Now - end game for both users
       setCurrentScreen('shortlist');
     } else {
-      // Continue swiping - reset counters based on mode
+      // Keep Browsing - reset counter, continue deck
       if (session?.mode === 'dual') {
         resetNewMutualSinceNudge();
       } else {
         resetNewLikesSinceNudge();
       }
       setHasLikedCurrentMovie(false);
+      console.log('Keep browsing selected, continuing with deck');
     }
   };
 
@@ -523,26 +525,23 @@ export default function SwipeDeck() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              {session?.mode === 'dual' ? 'You both liked 3 movies! 🎉' : 'Your Shortlist is Ready! 🎉'}
+              You found 3 mutual matches! 🎉
             </h2>
             <p className="text-gray-600 mb-6">
-              {session?.mode === 'dual' 
-                ? "You've found 3 mutual matches! Would you like to view your shortlist or explore more movies?"
-                : "You've liked 3 movies! Would you like to view your shortlist or continue swiping?"
-              }
+              What would you like to do?
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => handleNudgeAction('shortlist')}
-                className="flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-full hover:bg-red-700 transition-all"
-              >
-                View Shortlist
-              </button>
               <button
                 onClick={() => handleNudgeAction('continue')}
                 className="flex-1 bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-full hover:bg-gray-400 transition-all"
               >
-                {session?.mode === 'dual' ? 'Explore More' : 'Continue Swiping'}
+                Keep Browsing
+              </button>
+              <button
+                onClick={() => handleNudgeAction('shortlist')}
+                className="flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-full hover:bg-red-700 transition-all"
+              >
+                Shortlist Now
               </button>
             </div>
           </div>
