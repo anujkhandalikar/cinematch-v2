@@ -37,8 +37,8 @@ export default function HomeScreen() {
         </button>
 
         {/* Footer */}
-        <div className="text-xs text-gray-400">
-          <p>Powered by TMDB — Your gateway to the world's cinema.</p>
+        <div className="text-xs text-gray-400 italic">
+          <p>powered by ganesh's <a href="https://bit.ly/3L1EXNX" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300 transition-colors">apm flipkart deck</a></p>
         </div>
       </div>
     </div>
