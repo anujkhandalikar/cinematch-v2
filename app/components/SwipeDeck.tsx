@@ -588,6 +588,8 @@ export default function SwipeDeck() {
       console.log('Setting up polling for partner likes');
       
       const pollPartnerLikes = async () => {
+        if (!session.supabaseSession || !session.userId) return;
+        
         try {
           const { data, error } = await supabase
             .from('movie_likes')
