@@ -405,32 +405,37 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
 // Fetch movies by genre
 export async function fetchMoviesByGenre(genreId: number, page: number = 1): Promise<any[]> {
   try {
-    // Fetch multiple pages for genre-based movies too
-    // Reduced to 5 pages for faster mobile loading (100 movies per genre)
-    const pages = [1, 2, 3, 4, 5]; // Fetch first 5 pages (100 movies)
+    // Reduced to 2 pages per genre to avoid 500 errors
+    const pages = [1, 2]; // Fetch first 2 pages (40 movies per genre)
     const promises = pages.map((p, index) => {
       const endpoint = encodeURIComponent(`/discover/movie?with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`);
       const url = `${API_BASE_URL}?endpoint=${endpoint}`;
       // Return both the fetch promise and the page number to maintain order
-      return fetchWithTimeout(url, 15000).then(response => ({ response, pageIndex: index }));
+      return fetchWithTimeout(url, 10000).then(
+        response => ({ response, pageIndex: index }),
+        error => {
+          console.warn(`Page ${p} failed for genre ${genreId}:`, error);
+          return { response: null, pageIndex: index };
+        }
+      );
     });
     
     const responses = await Promise.all(promises);
     
-    for (const { response } of responses) {
-      if (!response.ok) {
-        throw new Error(`TMDB API error: ${response.status}`);
-      }
+    // Filter out failed responses
+    const successfulResponses = responses.filter(({ response }) => response && response.ok);
+    
+    if (successfulResponses.length === 0) {
+      console.error(`All pages failed for genre ${genreId}`);
+      return [];
     }
     
-    // Sort responses back to page order by their original index
-    responses.sort((a, b) => a.pageIndex - b.pageIndex);
-    
-    const dataPromises = responses.map(({ response }) => response.json());
+    // Process only successful responses
+    const dataPromises = successfulResponses.map(({ response }) => response.json());
     const allData = await Promise.all(dataPromises);
     
-    const allMovies = allData.flatMap(data => data.results);
-    console.log('Genre movies fetched:', allMovies.length, 'movies');
+    const allMovies = allData.flatMap(data => data.results || []);
+    console.log(`Genre ${genreId} movies fetched: ${allMovies.length} movies`);
     return allMovies.map(convertTMDBMovie);
   } catch (error) {
     console.error('Error fetching movies by genre:', error);
