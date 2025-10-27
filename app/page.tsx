@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
+import { sessionService } from '@/lib/supabase';
 import HomeScreen from './components/HomeScreen';
 import PreferencesScreen from './components/PreferencesScreen';
 import ModeSelectionScreen from './components/ModeSelectionScreen';
@@ -38,6 +39,23 @@ export default function Home() {
       
       const loadMoviesAsync = async () => {
         try {
+          // Use seed for dual mode to ensure same movie sequence, or random for single mode
+          const seed = session?.seed || Math.random();
+          
+          // For dual mode, check if movie deck already exists in Supabase
+          if (session?.mode === 'dual' && session?.supabaseSession) {
+            const dbSession = await sessionService.getSessionByCode(session.code!);
+            
+            if (dbSession.movie_deck && dbSession.movie_deck.length > 0) {
+              // Movie deck already exists - load it
+              console.log('✅ Loading existing movie deck from Supabase:', dbSession.movie_deck.length, 'movies');
+              console.log('First 5 movies:', dbSession.movie_deck.slice(0, 5).map((m: any) => m.title));
+              loadMovies(dbSession.movie_deck);
+              setIsLoadingMovies(false);
+              return;
+            }
+          }
+          
           // Use combined preferences for dual mode, or individual preferences for single mode
           const prefsToUse = session?.mode === 'dual' && session?.combinedPreferences 
             ? session.combinedPreferences 
@@ -48,14 +66,25 @@ export default function Home() {
           // Fetch movies from TMDB with preferences
           const movies = await fetchFilteredMovies(prefsToUse);
           console.log('Fetched movies:', movies.length);
-          
-          // Use seed for dual mode to ensure same movie sequence, or random for single mode
-          const seed = session?.seed || Math.random();
           console.log('Using seed:', seed);
+          console.log('First 5 movies BEFORE shuffle:', movies.slice(0, 5).map(m => m.title));
           
           const filtered = filterMovies(movies, prefsToUse, seed);
           console.log('Filtered movies:', filtered.length);
-          console.log('First 5 movies:', filtered.slice(0, 5).map(m => m.title));
+          console.log('First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
+          console.log('First 10 movie IDs:', filtered.slice(0, 10).map(m => ({ title: m.title, id: m.id })));
+          
+          // Save movie deck to Supabase for dual mode
+          if (session?.mode === 'dual' && session?.supabaseSession) {
+            try {
+              await sessionService.updateSession(session.supabaseSession.id, {
+                movie_deck: filtered
+              });
+              console.log('✅ Movie deck saved to Supabase');
+            } catch (err) {
+              console.error('Error saving movie deck:', err);
+            }
+          }
           
           loadMovies(filtered);
         } catch (error) {

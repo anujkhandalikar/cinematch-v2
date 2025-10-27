@@ -18,6 +18,7 @@ export interface Session {
   joiner_ready: boolean;
   creator_preferences: any;
   joiner_preferences?: any;
+  movie_deck?: any; // Combined movie deck for both users
   created_at: string;
   updated_at: string;
 }
@@ -67,9 +68,14 @@ export const sessionService = {
 
   // Update session
   async updateSession(sessionId: string, updates: Partial<Session>) {
+    const updatesWithTimestamp = {
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+    
     const { data, error } = await supabase
       .from('sessions')
-      .update(updates)
+      .update(updatesWithTimestamp)
       .eq('id', sessionId)
       .select()
       .single();
