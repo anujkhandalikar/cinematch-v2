@@ -101,6 +101,7 @@ interface AppState {
   addMovieLike: (movie: Movie) => Promise<void>;
   subscribeToRealtimeUpdates: () => void;
   unsubscribeFromRealtimeUpdates: () => void;
+  refreshSessionState: () => Promise<void>;
   
   // Reset state
   resetState: () => void;
