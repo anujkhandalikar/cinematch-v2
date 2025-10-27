@@ -28,7 +28,12 @@ export default function Home() {
   // Load movies when session starts (simplified to prevent infinite loops)
   useEffect(() => {
     if (currentScreen === 'swipe' && movies.length === 0 && !isLoadingMovies) {
-      console.log('Loading movies for swipe screen');
+      console.log('=== LOADING MOVIES FOR SWIPE SCREEN ===');
+      console.log('Session mode:', session?.mode);
+      console.log('Combined preferences:', session?.combinedPreferences);
+      console.log('Individual preferences:', preferences);
+      console.log('Session seed:', session?.seed);
+      
       setIsLoadingMovies(true);
       
       const loadMoviesAsync = async () => {
@@ -38,12 +43,19 @@ export default function Home() {
             ? session.combinedPreferences 
             : preferences;
           
+          console.log('Prefs to use:', prefsToUse);
+          
           // Fetch movies from TMDB with preferences
           const movies = await fetchFilteredMovies(prefsToUse);
+          console.log('Fetched movies:', movies.length);
           
           // Use seed for dual mode to ensure same movie sequence, or random for single mode
           const seed = session?.seed || Math.random();
+          console.log('Using seed:', seed);
+          
           const filtered = filterMovies(movies, prefsToUse, seed);
+          console.log('Filtered movies:', filtered.length);
+          console.log('First 5 movies:', filtered.slice(0, 5).map(m => m.title));
           
           loadMovies(filtered);
         } catch (error) {
