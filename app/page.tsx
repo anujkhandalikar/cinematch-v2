@@ -44,15 +44,24 @@ export default function Home() {
           
           // For dual mode, check if movie deck already exists in Supabase
           if (session?.mode === 'dual' && session?.supabaseSession) {
+            console.log('Checking for existing movie deck in Supabase...');
             const dbSession = await sessionService.getSessionByCode(session.code!);
+            
+            console.log('Database session:', {
+              hasMovieDeck: !!dbSession.movie_deck,
+              movieDeckLength: dbSession.movie_deck?.length || 0,
+              userIsCreator: session.isCreator
+            });
             
             if (dbSession.movie_deck && dbSession.movie_deck.length > 0) {
               // Movie deck already exists - load it
               console.log('✅ Loading existing movie deck from Supabase:', dbSession.movie_deck.length, 'movies');
-              console.log('First 5 movies:', dbSession.movie_deck.slice(0, 5).map((m: any) => m.title));
+              console.log('First 5 movies:', dbSession.movie_deck.slice(0, 5).map((m: any) => ({ title: m.title, id: m.id })));
               loadMovies(dbSession.movie_deck);
               setIsLoadingMovies(false);
               return;
+            } else {
+              console.log('No existing movie deck found, will create new one');
             }
           }
           
@@ -74,16 +83,22 @@ export default function Home() {
           console.log('First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
           console.log('First 10 movie IDs:', filtered.slice(0, 10).map(m => ({ title: m.title, id: m.id })));
           
-          // Save movie deck to Supabase for dual mode
-          if (session?.mode === 'dual' && session?.supabaseSession) {
+          // Save movie deck to Supabase for dual mode (only if creator)
+          if (session?.mode === 'dual' && session?.supabaseSession && session?.isCreator) {
             try {
+              console.log('Saving movie deck to Supabase as creator...');
               await sessionService.updateSession(session.supabaseSession.id, {
                 movie_deck: filtered
               });
-              console.log('✅ Movie deck saved to Supabase');
+              console.log('✅ Movie deck saved to Supabase:', {
+                movieCount: filtered.length,
+                firstFive: filtered.slice(0, 5).map(m => ({ title: m.title, id: m.id }))
+              });
             } catch (err) {
-              console.error('Error saving movie deck:', err);
+              console.error('❌ Error saving movie deck:', err);
             }
+          } else if (session?.mode === 'dual' && session?.supabaseSession && !session?.isCreator) {
+            console.log('Joiner: Not saving movie deck, creator will do it');
           }
           
           loadMovies(filtered);
