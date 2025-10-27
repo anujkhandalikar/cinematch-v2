@@ -15,10 +15,18 @@ export default function LoadingScreen() {
     const loadMovies = async () => {
       try {
         // Get preferences
-        const preferences = session?.combinedPreferences || session?.creatorPreferences || {
+        const rawPreferences = session?.combinedPreferences || session?.creatorPreferences || {
           genres: [],
           ottPlatforms: [],
           adultContent: false
+        };
+
+        // Convert preferences to match fetchFilteredMovies signature
+        const preferences = {
+          genres: rawPreferences.genres,
+          ottPlatforms: rawPreferences.ottPlatforms,
+          adultContent: rawPreferences.adultContent,
+          // Don't pass releaseYear as it's not compatible with fetchFilteredMovies
         };
 
         setLoadingText('Loading movies...');
