@@ -112,7 +112,7 @@ export default function ReadyScreen() {
 
   // Auto-start game when both users are ready (after 3 seconds)
   useEffect(() => {
-    console.log('Auto-start check:', {
+    console.log('🔍 Auto-start check:', {
       'mode': session?.mode,
       'isReady': isReady,
       'partnerReady': partnerReady,
@@ -120,20 +120,25 @@ export default function ReadyScreen() {
       'conditionMet': session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession
     });
     
-    if (session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession) {
-      console.log('✅ Both users ready, starting countdown to auto-start (3 seconds)');
+    // Only trigger if all conditions are met AND session is dual mode
+    const shouldAutoStart = session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession;
+    
+    if (shouldAutoStart) {
+      console.log('✅✅✅ Both users ready, starting countdown to auto-start (3 seconds)');
       
       const countdown = setTimeout(() => {
-        console.log('✅✅✅ 3 seconds elapsed, starting game NOW');
+        console.log('⏰⏰⏰ 3 seconds elapsed, starting game NOW ⏰⏰⏰');
         setCurrentScreen('swipe');
-      }, 3000); // 3000ms = 3 seconds
+      }, 3000);
       
       return () => {
-        console.log('Clearing countdown');
+        console.log('🧹 Cleaning up countdown');
         clearTimeout(countdown);
       };
+    } else {
+      console.log('❌ Auto-start conditions not met, waiting...');
     }
-  }, [session?.mode, isReady, partnerReady, session?.supabaseSession, setCurrentScreen]);
+  }, [isReady, partnerReady, session?.supabaseSession]);
 
   // Preload movies when both users are ready
   useEffect(() => {
