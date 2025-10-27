@@ -343,54 +343,72 @@ export default function SwipeDeck() {
   // Subscribe to partner likes in dual mode
   useEffect(() => {
     if (session?.mode === 'dual' && session?.supabaseSession) {
-      console.log('Setting up partner likes subscription for session:', session.supabaseSession.id);
+      console.log('=== SETTING UP PARTNER LIKES SUBSCRIPTION ===');
+      console.log('Session ID:', session.supabaseSession.id);
       console.log('Current user ID:', session.userId);
       
       // Subscribe to likes changes to track partner likes
       const subscription = supabase
         .channel(`partner-likes-${session.supabaseSession.id}`)
         .on('postgres_changes', {
-          event: 'INSERT',
+          event: '*', // Listen to all events
           schema: 'public',
           table: 'movie_likes',
           filter: `session_id=eq.${session.supabaseSession.id}`
         }, (payload) => {
-          console.log('=== PARTNER LIKE RECEIVED ===');
+          console.log('🎬🎬🎬 PARTNER LIKE RECEIVED 🎬🎬🎬');
+          console.log('Event type:', payload.eventType);
           console.log('Payload:', payload);
           console.log('New data:', payload.new);
-          console.log('User ID from payload:', payload.new?.user_id);
-          console.log('Current user ID:', session.userId);
-          console.log('Is from different user?', payload.new?.user_id !== session.userId);
           
-          if (payload.new && payload.new.user_id !== session.userId) {
+          if (!payload.new) {
+            console.log('❌ No new data in payload');
+            return;
+          }
+          
+          console.log('User ID from payload:', payload.new.user_id);
+          console.log('Current user ID:', session.userId);
+          console.log('Is from different user?', payload.new.user_id !== session.userId);
+          
+          if (payload.new.user_id !== session.userId) {
             const partnerMovie = payload.new.movie_data;
-            console.log('Adding to partnerLiked:', partnerMovie.title);
-            console.log('Current userLiked:', userLikedRef.current.map(m => m.title));
+            console.log('✅ Adding partner movie to partnerLiked:', partnerMovie);
             
             setPartnerLiked(prev => {
+              console.log('Previous partnerLiked:', prev.map(m => m.title));
               const newPartnerLiked = [...prev, partnerMovie];
-              console.log('Updated partnerLiked:', newPartnerLiked.map(m => m.title));
-              
-              // Just update partnerLiked - don't check for mutuality here
-              // Mutual detection will happen when user likes the movie
-              console.log('Partner like received for:', partnerMovie.title, '- Added to partnerLiked array');
+              console.log('✅✅✅ Updated partnerLiked:', newPartnerLiked.map(m => ({ title: m.title, id: m.id })));
               
               return newPartnerLiked;
             });
           } else {
-            console.log('Ignoring own like or invalid payload');
+            console.log('❌ Ignoring own like');
           }
         })
         .subscribe((status) => {
-          console.log('Partner likes subscription status:', status);
+          console.log('📡 Subscription status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Successfully subscribed to partner likes!');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('❌ Channel error');
+          } else if (status === 'TIMED_OUT') {
+            console.error('❌ Subscription timed out');
+          } else if (status === 'CLOSED') {
+            console.error('❌ Subscription closed');
+          }
         });
       
       return () => {
-        console.log('Cleaning up partner likes subscription');
+        console.log('🧹 Cleaning up partner likes subscription');
         subscription.unsubscribe();
       };
+    } else {
+      console.log('❌ Cannot setup subscription:', {
+        mode: session?.mode,
+        hasSupabaseSession: !!session?.supabaseSession
+      });
     }
-  }, [session?.mode, session?.supabaseSession?.id, session?.userId]); // Removed problematic dependencies
+  }, [session?.mode, session?.supabaseSession?.id, session?.userId]);
 
   // Show loading or end state
   if (!currentMovie || currentMovieIndex >= movies.length) {
