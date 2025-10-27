@@ -46,12 +46,22 @@ export default function SwipeDeck() {
   
   // Refs to access current values in subscriptions
   const userLikedRef = useRef<Movie[]>([]);
+  const partnerLikedRef = useRef<Movie[]>([]);
+  const mutualLikedRef = useRef<Movie[]>([]);
   const newMutualSinceNudgeRef = useRef(0);
   
   // Update refs when state changes
   useEffect(() => {
     userLikedRef.current = userLiked;
   }, [userLiked]);
+  
+  useEffect(() => {
+    partnerLikedRef.current = partnerLiked;
+  }, [partnerLiked]);
+  
+  useEffect(() => {
+    mutualLikedRef.current = mutualLiked;
+  }, [mutualLiked]);
   
   useEffect(() => {
     newMutualSinceNudgeRef.current = newMutualSinceNudge;
@@ -409,6 +419,38 @@ export default function SwipeDeck() {
               console.log('Previous partnerLiked:', prev.map(m => m.title));
               const newPartnerLiked = [...prev, partnerMovie];
               console.log('✅✅✅ Updated partnerLiked:', newPartnerLiked.map(m => ({ title: m.title, id: m.id })));
+              
+              // Check if this creates a mutual match (user already liked this movie)
+              const userLikedIds = userLikedRef.current.map(m => m.id);
+              const isMutual = userLikedIds.includes(partnerMovie.id);
+              
+              if (isMutual) {
+                console.log('🎉🎉🎉 PARTNER LIKES FOUND MUTUAL MATCH!', partnerMovie.title);
+                const currentUserLikedMovies = userLikedRef.current;
+                const userLikedThisMovie = currentUserLikedMovies.find(m => m.id === partnerMovie.id);
+                
+                if (userLikedThisMovie && !mutualLikedRef.current.some(m => m.id === partnerMovie.id)) {
+                  console.log('Adding mutual match from partner like:', partnerMovie.title);
+                  setMutualLiked(prevMutual => {
+                    if (prevMutual.some(m => m.id === partnerMovie.id)) {
+                      return prevMutual; // Already mutual
+                    }
+                    
+                    const newMutualLiked = [...prevMutual, partnerMovie];
+                    incrementNewMutualSinceNudge();
+                    const updatedValue = useStore.getState().newMutualSinceNudge;
+                    
+                    console.log('Mutual match from partner like - newMutualSinceNudge:', updatedValue);
+                    
+                    if (updatedValue >= 3) {
+                      console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached (from partner like)');
+                      setTimeout(() => setShowNudgeModal(true), 500);
+                    }
+                    
+                    return newMutualLiked;
+                  });
+                }
+              }
               
               return newPartnerLiked;
             });
