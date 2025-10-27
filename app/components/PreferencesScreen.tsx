@@ -55,8 +55,8 @@ export default function PreferencesScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-black p-4 sm:p-6 overflow-y-auto pb-20">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-black overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6 pb-32">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
