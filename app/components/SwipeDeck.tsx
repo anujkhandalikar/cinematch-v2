@@ -176,12 +176,13 @@ export default function SwipeDeck() {
       
       // Check for mutuality
       const isMutual = partnerLiked.some(movie => movie.id === currentMovie.id);
-      console.log('Checking for mutuality:', {
-        movie: currentMovie.title,
-        movieId: currentMovie.id,
-        partnerLikedIds: partnerLiked.map(m => m.id),
-        isMutual
-      });
+      console.log('🔍🔍🔍 CHECKING FOR MUTUALITY 🔍🔍🔍');
+      console.log('Movie:', currentMovie.title);
+      console.log('Movie ID:', currentMovie.id);
+      console.log('Partner liked movies:', partnerLiked.map(m => ({ title: m.title, id: m.id })));
+      console.log('Partner liked IDs:', partnerLiked.map(m => m.id));
+      console.log('Is mutual?', isMutual);
+      console.log('Comparison:', partnerLiked.map(m => `${m.title} (${m.id}) === ${currentMovie.title} (${currentMovie.id})? ${m.id === currentMovie.id}`));
       
       // Also check if this movie is already in mutualLiked to prevent duplicates
       const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
