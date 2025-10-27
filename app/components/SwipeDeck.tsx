@@ -211,7 +211,7 @@ export default function SwipeDeck() {
           }
           
           // Check if partner has liked this movie
-          isMutual = data && data.length > 0;
+          isMutual = !!(data && data.length > 0);
           console.log('Is mutual?', isMutual);
         } catch (err) {
           console.error('Error checking mutuality in database:', err);
