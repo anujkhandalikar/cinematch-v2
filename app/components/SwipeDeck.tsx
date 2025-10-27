@@ -184,12 +184,15 @@ export default function SwipeDeck() {
         const newMutualLiked = [...mutualLiked, currentMovie];
         setMutualLiked(newMutualLiked);
         incrementNewMutualSinceNudge();
+        const newMutualSinceNudgeValue = newMutualSinceNudge + 1;
         console.log('Mutual match added:', {
           movie: currentMovie.title,
           mutualCount: newMutualLiked.length,
-          newMutualSinceNudge: newMutualSinceNudge + 1
+          newMutualSinceNudge: newMutualSinceNudgeValue
         });
-        if (newMutualSinceNudge + 1 >= 3) {
+        
+        // Check if we should show nudge after incrementing
+        if (newMutualSinceNudgeValue >= 3) {
           console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached');
           setTimeout(() => {
             setShowNudgeModal(true);
