@@ -128,32 +128,10 @@ export function filterMovies(movies: Movie[], preferences: {
       if (!hasPlatform) return false;
     }
     
-    // Year filter
-    if (preferences.releaseYear) {
-      const movieYear = movie.year;
-      console.log(`Year filter: ${movie.title} (${movieYear}) vs ${preferences.releaseYear}`);
-      switch (preferences.releaseYear) {
-        case '2025':
-          if (movieYear !== 2025) {
-            console.log(`Filtered out ${movie.title} - not 2025 (year: ${movieYear})`);
-            return false;
-          }
-          break;
-        case '2000s':
-          if (movieYear < 2000 || movieYear > 2024) {
-            console.log(`Filtered out ${movie.title} - not in 2000s (2000-2024)`);
-            return false;
-          }
-          break;
-        case 'older':
-          if (movieYear >= 2000) {
-            console.log(`Filtered out ${movie.title} - not older than 2000 (year: ${movieYear})`);
-            return false;
-          }
-          break;
-      }
-      console.log(`✓ ${movie.title} passed year filter`);
-    }
+    // Year filter - commented out since we're not passing releaseYear in simplified preferences
+    // if (preferences.releaseYear) {
+    //   ...year filtering logic...
+    // }
     
     return true;
   });
