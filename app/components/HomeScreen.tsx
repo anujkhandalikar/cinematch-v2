@@ -23,34 +23,17 @@ export default function HomeScreen() {
           Swipe. Match. Watch.
         </p>
 
-        {/* Match Options */}
+        {/* Description */}
         <p className="text-sm text-white mb-8">
-          Match solo • Match with friends
+          find your next watch, in minutes
         </p>
-
-        {/* Features List */}
-        <div className="flex flex-col gap-3 items-start mb-8">
-          <div className="flex items-center gap-2 text-white">
-            <span>🎯</span>
-            <span>Personalized picks</span>
-          </div>
-          <div className="flex items-center gap-2 text-white">
-            <span>🎭</span>
-            <span>Curated for every mood</span>
-          </div>
-          <div className="flex items-center gap-2 text-white">
-            <span>📱</span>
-            <span>Built for mobile</span>
-          </div>
-        </div>
 
         {/* CTA Button */}
         <button
           onClick={() => setCurrentScreen('preferences')}
-          className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation flex items-center justify-center gap-2 mb-6"
+          className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation mb-6"
         >
-          Start Matching
-          <span>→</span>
+          Start
         </button>
 
         {/* Footer */}
