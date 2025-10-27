@@ -90,24 +90,19 @@ export default function ReadyScreen() {
     }
   }, [session?.supabaseSession?.creator_ready, session?.supabaseSession?.joiner_ready, session?.isCreator, session?.creatorPreferences, session?.joinerPreferences, combinePreferences, isReady, partnerReady]);
 
-  // Listen to store changes for partner ready state
+  // Listen to store changes for partner ready state  
   useEffect(() => {
-    const unsubscribe = useStore.subscribe(
-      (state) => state.session?.supabaseSession,
-      (supabaseSession) => {
-        if (supabaseSession && session?.isCreator !== undefined) {
-          const currentPartnerReady = session.isCreator ? supabaseSession.joiner_ready : supabaseSession.creator_ready;
-          console.log('Store subscription: Partner ready state changed', {
-            isCreator: session.isCreator,
-            creatorReady: supabaseSession.creator_ready,
-            joinerReady: supabaseSession.joiner_ready,
-            currentPartnerReady
-          });
-          setPartnerReady(currentPartnerReady);
-        }
+    const updatePartnerState = () => {
+      const currentSession = useStore.getState().session;
+      if (currentSession?.supabaseSession && session?.isCreator !== undefined) {
+        const currentPartnerReady = session.isCreator 
+          ? currentSession.supabaseSession.joiner_ready 
+          : currentSession.supabaseSession.creator_ready;
+        setPartnerReady(currentPartnerReady);
       }
-    );
+    };
     
+    const unsubscribe = useStore.subscribe(updatePartnerState);
     return unsubscribe;
   }, [session?.isCreator]);
 
