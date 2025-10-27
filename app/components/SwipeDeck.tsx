@@ -63,7 +63,12 @@ export default function SwipeDeck() {
   // Initialize session when component mounts
   useEffect(() => {
     if (!isSessionRunning && movies.length > 0) {
-      console.log('Initializing session flow - START SESSION');
+      console.log('=== INITIALIZING SESSION ===');
+      console.log('Movies loaded:', movies.length);
+      console.log('Session mode:', session?.mode);
+      console.log('Both users ready:', session?.supabaseSession?.creator_ready && session?.supabaseSession?.joiner_ready);
+      
+      // Start session timer
       setSessionStartTime(Date.now());
       setIsSessionRunning(true);
       setHasLikedCurrentMovie(false);
@@ -79,14 +84,16 @@ export default function SwipeDeck() {
           userLiked: [],
           partnerLiked: [],
           mutualLiked: [],
-          newMutualSinceNudge: 0
+          newMutualSinceNudge: 0,
+          timerStart: Date.now()
         });
       } else {
         // Single mode: Initialize individual likes counter
         resetNewLikesSinceNudge();
         
         console.log('Single mode session initialized:', {
-          newLikesSinceNudge: 0
+          newLikesSinceNudge: 0,
+          timerStart: Date.now()
         });
       }
     }
