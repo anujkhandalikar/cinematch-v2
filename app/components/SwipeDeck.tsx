@@ -433,8 +433,14 @@ export default function SwipeDeck() {
             
             // Update partnerLiked with movies from database
             const partnerMovies = data.map((like: any) => like.movie_data);
-            setPartnerLiked(partnerMovies);
-            console.log('✅ Updated partnerLiked from polling:', partnerMovies.map((m: any) => m.title));
+            
+            // Remove duplicates based on movie ID
+            const uniqueMovies = partnerMovies.filter((movie, index, self) => 
+              index === self.findIndex(m => m.id === movie.id)
+            );
+            
+            setPartnerLiked(uniqueMovies);
+            console.log('✅ Updated partnerLiked from polling:', uniqueMovies.map((m: any) => ({ title: m.title, id: m.id })));
           }
         } catch (err) {
           console.error('Polling error:', err);
