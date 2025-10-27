@@ -148,10 +148,17 @@ export default function ReadyScreen() {
       setIsPreloadingMovies(true);
       
       // Get combined preferences
-      const preferences = session.combinedPreferences || session.creatorPreferences || {
+      const rawPreferences = session.combinedPreferences || session.creatorPreferences || {
         genres: [],
         ottPlatforms: [],
         adultContent: false
+      };
+      
+      // Convert preferences to match fetchFilteredMovies signature
+      const preferences = {
+        genres: rawPreferences.genres,
+        ottPlatforms: rawPreferences.ottPlatforms,
+        adultContent: rawPreferences.adultContent,
       };
       
       // Preload movies in background
