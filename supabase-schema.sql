@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   creator_preferences JSONB,
   joiner_preferences JSONB,
   movie_deck JSONB, -- Store the combined movie deck for both users
+  mutual_matches JSONB DEFAULT '[]'::jsonb, -- Shared mutual matches counter for both users
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
