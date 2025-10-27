@@ -410,6 +410,47 @@ export default function SwipeDeck() {
     }
   }, [session?.mode, session?.supabaseSession?.id, session?.userId]);
 
+  // Fallback: Poll database for partner likes every 2 seconds
+  useEffect(() => {
+    if (session?.mode === 'dual' && session?.supabaseSession && session?.userId) {
+      console.log('Setting up polling for partner likes');
+      
+      const pollPartnerLikes = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('movie_likes')
+            .select('*')
+            .eq('session_id', session.supabaseSession.id)
+            .neq('user_id', session.userId); // Only get partner's likes
+          
+          if (error) {
+            console.error('Error fetching partner likes:', error);
+            return;
+          }
+          
+          if (data && data.length > 0) {
+            console.log('📥 Polled partner likes from DB:', data.length);
+            
+            // Update partnerLiked with movies from database
+            const partnerMovies = data.map((like: any) => like.movie_data);
+            setPartnerLiked(partnerMovies);
+            console.log('✅ Updated partnerLiked from polling:', partnerMovies.map((m: any) => m.title));
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
+      };
+      
+      // Poll immediately
+      pollPartnerLikes();
+      
+      // Set up interval
+      const interval = setInterval(pollPartnerLikes, 2000); // Every 2 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [session?.mode, session?.supabaseSession?.id, session?.userId]);
+
   // Show loading or end state
   if (!currentMovie || currentMovieIndex >= movies.length) {
     return (
