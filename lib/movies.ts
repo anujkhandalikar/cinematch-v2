@@ -115,17 +115,21 @@ export function filterMovies(movies: Movie[], preferences: {
       return false;
     }
     
-    // Genre filter (lenient - if no genres selected, show all)
+    // Genre filter with AND logic - movie must have ALL selected genres
     if (preferences.genres && preferences.genres.length > 0) {
-      const hasGenre = movie.genres.some((genre: Genre) => preferences.genres.includes(genre));
-      if (!hasGenre) return false;
+      const hasAllGenres = preferences.genres.every((selectedGenre) => 
+        movie.genres.includes(selectedGenre)
+      );
+      if (!hasAllGenres) return false;
     }
     
-    // OTT platform filter (lenient - if no platforms selected, show all)
+    // OTT platform filter with AND logic - movie must be on ALL selected platforms
     if (preferences.ottPlatforms && preferences.ottPlatforms.length > 0) {
-      const hasPlatform = movie.ott.some((platform: OTTPlatform) => preferences.ottPlatforms.includes(platform));
-      console.log(`OTT filter: ${movie.title} has platforms [${movie.ott.join(', ')}], looking for [${preferences.ottPlatforms.join(', ')}], match: ${hasPlatform}`);
-      if (!hasPlatform) return false;
+      const hasAllPlatforms = preferences.ottPlatforms.every((selectedPlatform) => 
+        movie.ott.includes(selectedPlatform)
+      );
+      console.log(`OTT filter: ${movie.title} has platforms [${movie.ott.join(', ')}], looking for ALL of [${preferences.ottPlatforms.join(', ')}], match: ${hasAllPlatforms}`);
+      if (!hasAllPlatforms) return false;
     }
     
     // Year filter - commented out since we're not passing releaseYear in simplified preferences
@@ -138,29 +142,38 @@ export function filterMovies(movies: Movie[], preferences: {
   
   console.log('Filtered movies:', filtered.length);
 
-  // If filtering removed all movies, handle intelligently based on filter type
+  // If filtering removed all movies, handle intelligently
   if (filtered.length === 0) {
-    console.log('⚠️ No movies after filtering');
+    console.log('⚠️ No movies after strict AND filtering');
+    console.log('⚠️ Trying relaxed filtering (OR logic) as fallback...');
     
-    if (preferences.ottPlatforms && preferences.ottPlatforms.length > 0) {
-      // For OTT filter, if no movies found, show movies with similar platforms
-      const similarPlatforms = ['Netflix', 'Prime Video', 'Disney+', 'HBO Max', 'Hulu', 'Apple TV+', 'Paramount+', 'Peacock'];
-      const fallbackPlatforms = similarPlatforms.filter(p => !preferences.ottPlatforms.includes(p as any));
-      
-      console.log(`No movies with ${preferences.ottPlatforms.join(', ')}, showing movies with similar platforms: ${fallbackPlatforms.join(', ')}`);
-      
-      filtered = movies.filter(movie => 
-        movie.ott.some((platform: OTTPlatform) => fallbackPlatforms.includes(platform))
-      );
-      
-      if (filtered.length === 0) {
-        console.log('Still no movies, returning original movies');
-        filtered = [...movies];
+    // Try with OR logic as fallback - at least some criteria match
+    filtered = movies.filter(movie => {
+      // Adult content filter still strict
+      if (!preferences.adultContent && movie.adult) {
+        return false;
       }
-    } else {
-      // For other filters, return original movies
-      console.log('Returning original movies');
+      
+      // Genre filter: at least ONE selected genre matches
+      if (preferences.genres && preferences.genres.length > 0) {
+        const hasAnyGenre = movie.genres.some((genre: Genre) => preferences.genres.includes(genre));
+        if (!hasAnyGenre) return false;
+      }
+      
+      // Platform filter: at least ONE selected platform matches
+      if (preferences.ottPlatforms && preferences.ottPlatforms.length > 0) {
+        const hasAnyPlatform = movie.ott.some((platform: OTTPlatform) => preferences.ottPlatforms.includes(platform));
+        if (!hasAnyPlatform) return false;
+      }
+      
+      return true;
+    });
+    
+    if (filtered.length === 0) {
+      console.log('⚠️ Still no movies, showing all movies regardless of preferences');
       filtered = [...movies];
+    } else {
+      console.log(`⚠️ Found ${filtered.length} movies with relaxed filtering`);
     }
   }
 
