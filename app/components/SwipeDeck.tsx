@@ -476,7 +476,7 @@ export default function SwipeDeck() {
           console.log('Is from different user?', newPayload.user_id !== session.userId);
           
           if (newPayload.user_id !== session.userId) {
-            const partnerMovie = payload.new.movie_data;
+            const partnerMovie = newPayload.movie_data;
             
             // Validate movie data before adding
             if (!partnerMovie || !partnerMovie.id || !partnerMovie.title) {
