@@ -400,10 +400,10 @@ export const useStore = create<AppState>((set) => ({
         if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && payload.new) {
           const newSession = payload.new;
           console.log('Processing session update:', {
-            isCreator: state.session.isCreator,
+            isCreator: state.session?.isCreator,
             creatorReady: newSession.creator_ready,
             joinerReady: newSession.joiner_ready,
-            partnerReady: state.session.isCreator ? newSession.joiner_ready : newSession.creator_ready
+            partnerReady: state.session?.isCreator ? newSession.joiner_ready : newSession.creator_ready
           });
           set((state) => ({
             session: state.session ? {
