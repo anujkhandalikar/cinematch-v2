@@ -353,57 +353,9 @@ export default function SwipeDeck() {
               const newPartnerLiked = [...prev, partnerMovie];
               console.log('Updated partnerLiked:', newPartnerLiked.map(m => m.title));
               
-              // Get current userLiked state to check for mutuality
-              const currentUserLiked = userLikedRef.current;
-              const isMutual = currentUserLiked.some(movie => movie.id === partnerMovie.id);
-              console.log('Checking for mutuality:', {
-                partnerMovie: partnerMovie.title,
-                partnerMovieId: partnerMovie.id,
-                userLikedIds: currentUserLiked.map(m => m.id),
-                isMutual
-              });
-              
-              if (isMutual) {
-                // Check if already mutual to prevent duplicates
-                const alreadyMutual = useStore.getState().session?.mutualLikes?.some(m => m.id === partnerMovie.id) || false;
-                
-                if (!alreadyMutual) {
-                  console.log('🎉 MUTUAL MATCH FOUND from partner like:', partnerMovie.title);
-                  setMutualLiked(prev => {
-                    // Double-check not already in mutualLiked
-                    if (prev.some(m => m.id === partnerMovie.id)) {
-                      console.log('Movie already in mutualLiked, skipping');
-                      return prev;
-                    }
-                    
-                    const newMutualLiked = [...prev, partnerMovie];
-                    incrementNewMutualSinceNudge();
-                    
-                    // Get current newMutualSinceNudge value
-                    const currentNewMutualSinceNudge = newMutualSinceNudgeRef.current;
-                    
-                    console.log('Mutual match added from partner:', {
-                      movie: partnerMovie.title,
-                      mutualCount: newMutualLiked.length,
-                      newMutualSinceNudge: currentNewMutualSinceNudge + 1
-                    });
-                    
-                    // Check if we should show nudge
-                    if (currentNewMutualSinceNudge + 1 >= 3) {
-                      console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached from partner');
-                      setTimeout(() => {
-                        setShowNudgeModal(true);
-                      }, 500);
-                    }
-                    
-                    return newMutualLiked;
-                  });
-                } else {
-                  console.log('Movie already marked as mutual from partner, skipping');
-                }
-              } else {
-                console.log('Not a mutual match yet, waiting for user to like:', partnerMovie.title);
-              }
+              // Just update partnerLiked - don't check for mutuality here
+              // Mutual detection will happen when user likes the movie
+              console.log('Partner like received for:', partnerMovie.title, '- Added to partnerLiked array');
               
               return newPartnerLiked;
             });
