@@ -112,15 +112,26 @@ export default function ReadyScreen() {
 
   // Auto-start game when both users are ready (after 3 seconds)
   useEffect(() => {
+    console.log('Auto-start check:', {
+      'mode': session?.mode,
+      'isReady': isReady,
+      'partnerReady': partnerReady,
+      'supabaseSession': !!session?.supabaseSession,
+      'conditionMet': session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession
+    });
+    
     if (session?.mode === 'dual' && isReady && partnerReady && session?.supabaseSession) {
-      console.log('Both users ready, starting countdown to auto-start');
+      console.log('✅ Both users ready, starting countdown to auto-start (3 seconds)');
       
       const countdown = setTimeout(() => {
-        console.log('3 seconds elapsed, starting game');
+        console.log('✅✅✅ 3 seconds elapsed, starting game NOW');
         setCurrentScreen('swipe');
-      }, 3000);
+      }, 3000); // 3000ms = 3 seconds
       
-      return () => clearTimeout(countdown);
+      return () => {
+        console.log('Clearing countdown');
+        clearTimeout(countdown);
+      };
     }
   }, [session?.mode, isReady, partnerReady, session?.supabaseSession, setCurrentScreen]);
 
