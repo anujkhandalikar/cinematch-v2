@@ -426,9 +426,11 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
     const successfulResponses = responses.filter(({ response }) => response && response.ok);
     
     if (successfulResponses.length === 0) {
-      console.error(`All pages failed for genre ${genreId}`);
+      console.warn(`All pages failed for genre ${genreId}, returning empty array`);
       return [];
     }
+    
+    console.log(`Successfully fetched ${successfulResponses.length} pages for genre ${genreId}`);
     
     // Process only successful responses
     const dataPromises = successfulResponses.map(({ response }) => response.json());

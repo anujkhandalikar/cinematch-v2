@@ -41,7 +41,12 @@ export async function fetchFilteredMovies(preferences: {
         
         if (genreId) {
           console.log(`Fetching movies for genre: ${genreName} (ID: ${genreId})`);
-          return await fetchMoviesByGenre(parseInt(genreId));
+          try {
+            return await fetchMoviesByGenre(parseInt(genreId));
+          } catch (error) {
+            console.error(`Failed to fetch movies for genre ${genreName}:`, error);
+            return [];
+          }
         }
         return [];
       });
@@ -49,6 +54,13 @@ export async function fetchFilteredMovies(preferences: {
       const genreResults = await Promise.all(genrePromises);
       movies = genreResults.flat();
       console.log('Genre-based movies fetched:', movies.length);
+      
+      // If genre fetching failed completely, fallback to popular movies
+      if (movies.length === 0) {
+        console.log('Genre fetching failed, falling back to popular movies...');
+        movies = await fetchMaximumMovies();
+        console.log('Fallback: Maximum movies fetched:', movies.length);
+      }
     } else {
       // If no specific genres, fetch maximum movies for better variety
       console.log('Fetching maximum movies from TMDB');
