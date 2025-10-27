@@ -1,6 +1,22 @@
 // TMDB API integration for movie data
-const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY || '1e652e44e3d133f83a692081459137a9';
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+// Using server-side proxy to hide API key from client
+const API_BASE_URL = '/api/movies';
+
+// Fetch with timeout helper - aggressive timeout for mobile networks
+function fetchWithTimeout(url: string, timeoutMs: number = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  return Promise.race([
+    fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeoutId)),
+    new Promise<Response>((_, reject) =>
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error(`Fetch timeout after ${timeoutMs}ms`));
+      }, timeoutMs)
+    )
+  ]) as Promise<Response>;
+}
 
 export interface TMDBMovie {
   id: number;
@@ -139,7 +155,8 @@ function assignOTTPlatforms(movie: TMDBMovie): string[] {
 // Fetch individual movie details to get runtime
 async function fetchMovieDetails(movieId: number): Promise<number> {
   try {
-    const response = await fetch(`${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&language=en-US`);
+    const endpoint = encodeURIComponent(`/movie/${movieId}?language=en-US`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 10000);
     if (!response.ok) {
       console.warn(`Failed to fetch details for movie ${movieId}: ${response.status}`);
       return 0;
@@ -262,30 +279,28 @@ export async function convertTMDBMovieWithRuntime(tmdbMovie: TMDBMovie): Promise
 
 // Fetch movies from multiple sources for maximum variety
 export async function fetchMaximumMovies(): Promise<any[]> {
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
     console.log('Fetching maximum movies from multiple sources...');
     
     // Use multiple endpoints with many pages to get 1000+ movies
+    // Reduced endpoints for better mobile network performance
     const endpoints = [
-      // Popular movies (30 pages = 600 movies)
-      ...Array.from({length: 30}, (_, i) => `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Top rated movies (20 pages = 400 movies)
-      ...Array.from({length: 20}, (_, i) => `${TMDB_BASE_URL}/movie/top_rated?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Now playing movies (15 pages = 300 movies)
-      ...Array.from({length: 15}, (_, i) => `${TMDB_BASE_URL}/movie/now_playing?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`),
-      // Upcoming movies (15 pages = 300 movies)
-      ...Array.from({length: 15}, (_, i) => `${TMDB_BASE_URL}/movie/upcoming?api_key=${TMDB_API_KEY}&page=${i+1}&language=en-US`)
+      // Popular movies (5 pages = 100 movies)
+      ...Array.from({length: 5}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/popular?page=${i+1}&language=en-US`);
+        return `${API_BASE_URL}?endpoint=${endpoint}`;
+      }),
+      // Top rated movies (3 pages = 60 movies)
+      ...Array.from({length: 3}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/top_rated?page=${i+1}&language=en-US`);
+        return `${API_BASE_URL}?endpoint=${endpoint}`;
+      })
     ];
     
-    console.log(`Fetching from ${endpoints.length} endpoints...`);
+    console.log(`Fetching from ${endpoints.length} endpoints (reduced for mobile performance)...`);
     
-    // Fetch in smaller batches to avoid rate limiting
-    const batchSize = 5;
+    // Smaller batch size for mobile networks
+    const batchSize = 3;
     const allMovies = [];
     
     for (let i = 0; i < endpoints.length; i += batchSize) {
@@ -295,7 +310,7 @@ export async function fetchMaximumMovies(): Promise<any[]> {
       try {
         // Track page order to ensure deterministic results
         const promises = batch.map((url, urlIndex) => 
-          fetch(url).then(response => ({ response, urlIndex }))
+          fetchWithTimeout(url, 15000).then(response => ({ response, urlIndex }))
         );
         const responses = await Promise.all(promises);
         
@@ -342,25 +357,21 @@ export async function fetchMaximumMovies(): Promise<any[]> {
 
 // Fetch popular movies
 export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
-  console.log('TMDB_API_KEY:', TMDB_API_KEY ? 'Found' : 'Not found');
-  
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
     // Fetch more pages to get 1000+ movies
-    const pages = Array.from({length: 50}, (_, i) => i + 1); // Fetch first 50 pages (1000+ movies)
+    // Fetch fewer pages for better performance (especially on mobile)
+    // Reduced from 50 to 10 pages for faster loading
+    const pages = Array.from({length: 10}, (_, i) => i + 1); // Fetch first 10 pages (200 movies)
     const allMovies = [];
     
     // Fetch pages sequentially to avoid rate limiting
     for (const pageNum of pages) {
       try {
-        const url = `${TMDB_BASE_URL}/movie/popular?api_key=${TMDB_API_KEY}&page=${pageNum}&language=en-US`;
+        const endpoint = encodeURIComponent(`/movie/popular?page=${pageNum}&language=en-US`);
+        const url = `${API_BASE_URL}?endpoint=${endpoint}`;
         console.log(`Fetching page ${pageNum}...`);
         
-        const response = await fetch(url);
+        const response = await fetchWithTimeout(url, 15000);
         
         if (!response.ok) {
           console.warn(`Page ${pageNum} failed with status: ${response.status}`);
@@ -393,19 +404,15 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
 
 // Fetch movies by genre
 export async function fetchMoviesByGenre(genreId: number, page: number = 1): Promise<any[]> {
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
     // Fetch multiple pages for genre-based movies too
-    const pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Fetch first 10 pages (200 movies)
+    // Reduced to 5 pages for faster mobile loading (100 movies per genre)
+    const pages = [1, 2, 3, 4, 5]; // Fetch first 5 pages (100 movies)
     const promises = pages.map((p, index) => {
-      const url = `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`;
-      console.log('Fetching genre movies from URL:', url);
+      const endpoint = encodeURIComponent(`/discover/movie?with_genres=${genreId}&page=${p}&language=en-US&sort_by=popularity.desc`);
+      const url = `${API_BASE_URL}?endpoint=${endpoint}`;
       // Return both the fetch promise and the page number to maintain order
-      return fetch(url).then(response => ({ response, pageIndex: index }));
+      return fetchWithTimeout(url, 15000).then(response => ({ response, pageIndex: index }));
     });
     
     const responses = await Promise.all(promises);
@@ -433,15 +440,9 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
 
 // Search movies
 export async function searchMovies(query: string, page: number = 1): Promise<any[]> {
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}&language=en-US`
-    );
+    const endpoint = encodeURIComponent(`/search/movie?query=${encodeURIComponent(query)}&page=${page}&language=en-US`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 15000);
     
     if (!response.ok) {
       throw new Error(`TMDB API error: ${response.status}`);
@@ -457,15 +458,9 @@ export async function searchMovies(query: string, page: number = 1): Promise<any
 
 // Fetch trending movies
 export async function fetchTrendingMovies(timeWindow: 'day' | 'week' = 'week', page: number = 1): Promise<any[]> {
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/trending/movie/${timeWindow}?api_key=${TMDB_API_KEY}&page=${page}&language=en-US`
-    );
+    const endpoint = encodeURIComponent(`/trending/movie/${timeWindow}?page=${page}&language=en-US`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 15000);
     
     if (!response.ok) {
       throw new Error(`TMDB API error: ${response.status}`);
@@ -481,15 +476,9 @@ export async function fetchTrendingMovies(timeWindow: 'day' | 'week' = 'week', p
 
 // Get available genres
 export async function fetchGenres(): Promise<TMDBGenre[]> {
-  if (!TMDB_API_KEY) {
-    console.error('TMDB API key not found');
-    return [];
-  }
-
   try {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}&language=en-US`
-    );
+    const endpoint = encodeURIComponent(`/genre/movie/list?language=en-US`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 10000);
     
     if (!response.ok) {
       throw new Error(`TMDB API error: ${response.status}`);

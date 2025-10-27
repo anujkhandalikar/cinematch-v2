@@ -15,11 +15,13 @@ import ShortlistScreen from './components/ShortlistScreen';
 
 export default function Home() {
   const currentScreen = useStore((state) => state.currentScreen);
+  const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const preferences = useStore((state) => state.preferences);
   const loadMovies = useStore((state) => state.loadMovies);
   const session = useStore((state) => state.session);
   const movies = useStore((state) => state.movies);
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const hasLoadedMovies = useRef(false);
 
   // Debug logging
@@ -32,6 +34,7 @@ export default function Home() {
     if (currentScreen !== 'swipe') {
       hasLoadedMovies.current = false;
       setIsLoadingMovies(false);
+      setLoadError(null);
     }
   }, [currentScreen]);
 
@@ -180,7 +183,9 @@ export default function Home() {
           console.log('   First 5 IDs:', filtered.slice(0, 5).map(m => m.id));
           loadMovies(filtered);
         } catch (error) {
-          console.error('Error loading movies:', error);
+          console.error('❌ Error loading movies:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load movies. Please check your connection and try again.';
+          setLoadError(errorMessage);
           loadMovies([]);
         } finally {
           setIsLoadingMovies(false);
@@ -206,6 +211,35 @@ export default function Home() {
     case 'loading':
       return <LoadingScreen />;
     case 'swipe':
+      // Show error screen if loading failed
+      if (loadError && !isLoadingMovies && movies.length === 0) {
+        return (
+          <div className="min-h-screen bg-black flex items-center justify-center p-4">
+            <div className="text-center max-w-md">
+              <div className="text-6xl mb-4">⚠️</div>
+              <p className="text-white text-xl mb-2">Failed to Load Movies</p>
+              <p className="text-gray-400 text-sm mb-6">{loadError}</p>
+              <button
+                onClick={() => {
+                  setLoadError(null);
+                  hasLoadedMovies.current = false;
+                  setIsLoadingMovies(true);
+                }}
+                className="bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition-all"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => setCurrentScreen('mode')}
+                className="mt-4 text-gray-400 hover:text-white transition-colors text-sm"
+              >
+                ← Back to Home
+              </button>
+            </div>
+          </div>
+        );
+      }
+      
       // Show loading screen if movies are loading or empty
       if (isLoadingMovies || movies.length === 0) {
         return (
@@ -214,6 +248,7 @@ export default function Home() {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
               <p className="text-white text-xl">Loading movies...</p>
               <p className="text-gray-400 text-sm mt-2">This may take a moment...</p>
+              {loadError && <p className="text-red-400 text-xs mt-4">{loadError}</p>}
             </div>
           </div>
         );
