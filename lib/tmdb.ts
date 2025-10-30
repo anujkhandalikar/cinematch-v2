@@ -188,23 +188,52 @@ export function convertTMDBToLanguages(tmdbLanguage: string): string {
   return reverseMap[tmdbLanguage] || commonMappings[tmdbLanguage] || 'English';
 }
 
+// Map TMDB provider IDs to our OTTPlatform types
+const TMDB_PROVIDER_MAP: Record<number, string> = {
+  8: 'Netflix',
+  9: 'Prime Video',
+  337: 'Disney+',
+  384: 'HBO Max',
+  15: 'Hulu',
+  350: 'Apple TV+',
+  531: 'Paramount+',
+  386: 'Peacock',
+};
+
+// Fetch watch providers for a movie (batch-friendly)
+async function fetchWatchProviders(movieId: number): Promise<string[]> {
+  try {
+    const endpoint = encodeURIComponent(`/movie/${movieId}/watch/providers`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 5000);
+    if (!response.ok) return [];
+    const data = await response.json();
+    const flatrate = data.results?.US?.flatrate || data.results?.IN?.flatrate || [];
+    return flatrate
+      .map((p: { provider_id: number }) => TMDB_PROVIDER_MAP[p.provider_id])
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // Assign realistic OTT platforms based on movie characteristics
-// (This is heuristic/demo logic, not real availability.)
+// Improved heuristic with better Hindi/Netflix coverage
 function assignOTTPlatforms(movie: TMDBMovie): string[] {
   const platforms: string[] = [];
-  
-  // Base assignment logic - assign platforms based on movie popularity, genre, and year
   const popularity = movie.popularity || 0;
   const year = new Date(movie.release_date).getFullYear();
   const genres = movie.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean);
+  const isHindi = movie.original_language === 'hi';
   
-  // Netflix - Popular movies and recent releases
-  if (popularity > 50 || year >= 2020) {
+  // Netflix - Popular movies, recent releases, and Hindi content (Netflix has strong Hindi library)
+  // Lower threshold for Hindi to show more Netflix content
+  if (popularity > 25 || year >= 2020 || (isHindi && popularity > 5)) {
     platforms.push('Netflix');
   }
   
-  // Prime Video - Broader selection, especially older movies
-  if (popularity > 20 || year < 2020) {
+  // Prime Video - Broader selection, especially older movies and Hindi
+  // Hindi content is very common on Prime Video
+  if (popularity > 10 || year < 2020 || isHindi) {
     platforms.push('Prime Video');
   }
   
@@ -248,13 +277,20 @@ function assignOTTPlatforms(movie: TMDBMovie): string[] {
     platforms.push('Prime Video'); // Default fallback
   }
   
-  // Randomly remove some platforms to make it more realistic
+  // For Hindi movies, keep Netflix and Prime Video more often
+  if (isHindi && platforms.length >= 2) {
+    // Don't randomly remove if we have Netflix or Prime Video
+    if (platforms.includes('Netflix') || platforms.includes('Prime Video')) {
+      return platforms;
+    }
+  }
+  
+  // Randomly remove some platforms to make it more realistic (but keep at least 1)
   if (platforms.length > 3) {
     const shuffled = platforms.sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.floor(Math.random() * 3) + 1);
   }
   
-  console.log(`OTT assignment for ${movie.title}: [${platforms.join(', ')}]`);
   return platforms;
 }
 

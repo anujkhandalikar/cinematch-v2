@@ -104,7 +104,9 @@ export async function streamLanguageAll(
     try { await idbSet(cacheKey, { movies: firstMovies, ts: Date.now() }); } catch {}
   }
 
-  const remaining = Array.from({ length: Math.max(totalPages - 3, 0) }, (_, i) => i + 4);
+  // Fetch up to 500 pages total (TMDB allows up to 500)
+  const maxPages = Math.min(totalPages, 500);
+  const remaining = Array.from({ length: Math.max(maxPages - 6, 0) }, (_, i) => i + 7);
   const concurrency = 4; let index = 0; let buffer: Movie[] = [];
   async function worker() {
     while (index < remaining.length) {
@@ -126,7 +128,7 @@ export async function streamLanguageAll(
 }
 
 // Fetch a fast seed for a language by grabbing the first N pages concurrently
-export async function fetchLanguageSeed(langCode: string, pages: number = 12, adult: boolean = false): Promise<Movie[]> {
+export async function fetchLanguageSeed(langCode: string, pages: number = 50, adult: boolean = false): Promise<Movie[]> {
   const originCountry = ['hi','ta','te','ml','bn'].includes(langCode) ? 'IN' : '';
   const regionParam = originCountry ? `&with_origin_country=${originCountry}&region=${originCountry}` : '';
   const pagesArr = Array.from({ length: pages }, (_, i) => i + 1);
