@@ -652,7 +652,7 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
     console.log(`Successfully fetched ${successfulResponses.length} pages for genre ${genreId}`);
     
     // Process only successful responses
-    const dataPromises = successfulResponses.map(({ response }) => response.json());
+    const dataPromises = successfulResponses.map(({ response }) => (response as Response).json());
     const allData = await Promise.all(dataPromises);
     
     const allMovies = allData.flatMap(data => data.results || []);
