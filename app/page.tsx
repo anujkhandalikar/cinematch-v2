@@ -89,7 +89,10 @@ export default function Home() {
               // Update deck only when the stream is complete to avoid
               // mid-session list resets that can advance the index.
               if (!isComplete) return;
-              const filteredChunk = filterMovies(m, preferences, seed);
+              const langRelaxed = (preferences.languages && preferences.languages.length > 0)
+                ? { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+                : preferences;
+              const filteredChunk = filterMovies(m, langRelaxed, seed);
               const setMovies = useStore.getState().setMovies;
               setMovies(filteredChunk);
             };
@@ -204,7 +207,10 @@ export default function Home() {
           // Convert preferences to match fetchFilteredMovies signature
           const onProgress = (m: any[], isComplete: boolean) => {
             if (!isComplete) return;
-            const filteredChunk = filterMovies(m, prefsToUse, seed);
+            const langRelaxed = (prefsToUse.languages && prefsToUse.languages.length > 0)
+              ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+              : prefsToUse;
+            const filteredChunk = filterMovies(m, langRelaxed, seed);
             const setMovies = useStore.getState().setMovies;
             setMovies(filteredChunk);
           };
@@ -220,11 +226,10 @@ export default function Home() {
           console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
-          let filtered = filterMovies(fetchedMovies, prefsToUse, seed);
-          if (prefsToUse.languages && prefsToUse.languages.length > 0 && filtered.length < 20) {
-            const relaxed = { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any;
-            filtered = filterMovies(fetchedMovies, relaxed, seed);
-          }
+          const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0)
+            ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+            : prefsToUse;
+          const filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs AFTER shuffle:', filtered.slice(0, 5).map(m => m.id));

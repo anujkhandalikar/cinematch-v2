@@ -96,7 +96,7 @@ export async function streamLanguageAll(
     return res.json();
   }
 
-  const first = await Promise.all([1,2,3].map(p => fetchPage(p)));
+  const first = await Promise.all([1,2,3,4,5,6].map(p => fetchPage(p)));
   const totalPages = Math.max(...first.map(f => f.total_pages || 1), 1);
   const firstMovies = first.flatMap(f => (f.results || []).map(convertTMDBMovie));
   if (firstMovies.length) {
@@ -124,7 +124,7 @@ export async function streamLanguageAll(
 }
 
 // Fetch a fast seed for a language by grabbing the first N pages concurrently
-export async function fetchLanguageSeed(langCode: string, pages: number = 6, adult: boolean = false): Promise<Movie[]> {
+export async function fetchLanguageSeed(langCode: string, pages: number = 12, adult: boolean = false): Promise<Movie[]> {
   const originCountry = ['hi','ta','te','ml','bn'].includes(langCode) ? 'IN' : '';
   const regionParam = originCountry ? `&with_origin_country=${originCountry}&region=${originCountry}` : '';
   const pagesArr = Array.from({ length: pages }, (_, i) => i + 1);
