@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useStore, Genre, OTTPlatform } from '@/lib/store';
+import { useStore, Genre, OTTPlatform, Language } from '@/lib/store';
 
 const GENRES: Genre[] = [
   'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
@@ -25,6 +25,8 @@ export default function PreferencesScreen() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<OTTPlatform[]>(preferences.ottPlatforms);
   // Languages removed from UI; will be ignored in logic
   const [adultContent, setAdultContent] = useState(preferences.adultContent);
+  const [highRatedOnly, setHighRatedOnly] = useState(preferences.highRatedOnly || false);
+  const [selectedLanguages, setSelectedLanguages] = useState<Language[]>(preferences.languages || []);
   const [releaseYear, setReleaseYear] = useState<'2025' | '2000s' | 'older' | null>(preferences.releaseYear);
 
   const handleGenreToggle = (genre: Genre) => {
@@ -49,9 +51,10 @@ export default function PreferencesScreen() {
     const newPreferences = {
       genres: selectedGenres,
       ottPlatforms: selectedPlatforms,
-      languages: [],
+      languages: selectedLanguages,
       adultContent,
-      releaseYear
+      releaseYear,
+      highRatedOnly
     };
     console.log('=== SAVING PREFERENCES ===');
     console.log('Selected release year:', releaseYear);
@@ -82,23 +85,23 @@ export default function PreferencesScreen() {
             </p>
           </div>
 
-          {/* OTT Platforms Section */}
+          {/* High Rated Only Toggle (moved above OTT) */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {OTT_PLATFORMS.map((platform) => (
-                <button
-                  key={platform}
-                  onClick={() => handlePlatformToggle(platform)}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedPlatforms.includes(platform)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {platform}
-                </button>
-              ))}
+            <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Show only 8+ IMDb Rated</h3>
+                <p className="text-sm text-gray-400">Surface only highly rated movies (≥ 8.0)</p>
+              </div>
+              <button
+                onClick={() => setHighRatedOnly(!highRatedOnly)}
+                className={`w-12 h-6 rounded-full transition-all ${
+                  highRatedOnly ? 'bg-red-600' : 'bg-gray-600'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                  highRatedOnly ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
             </div>
           </div>
 
@@ -119,6 +122,26 @@ export default function PreferencesScreen() {
                   }`}
                 >
                   {genre}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Language Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Language</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {(['English','Hindi','Tamil','Telugu','Malayalam','Bengali'] as Language[]).map((language) => (
+                <button
+                  key={language}
+                  onClick={() => setSelectedLanguages(prev => prev.includes(language) ? prev.filter(l => l !== language) : [...prev, language])}
+                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
+                    selectedLanguages.includes(language)
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {language}
                 </button>
               ))}
             </div>
@@ -165,6 +188,26 @@ export default function PreferencesScreen() {
                   adultContent ? 'translate-x-6' : 'translate-x-0.5'
                 }`} />
               </button>
+            </div>
+          </div>
+
+          {/* OTT Platforms Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {OTT_PLATFORMS.map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => handlePlatformToggle(platform)}
+                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
+                    selectedPlatforms.includes(platform)
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {platform}
+                </button>
+              ))}
             </div>
           </div>
         </div>

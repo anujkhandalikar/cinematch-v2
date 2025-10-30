@@ -6,11 +6,12 @@ import {
   fetchMaximumMovies,
   fetchHindiMovies,
   // convertLanguagesToTMDB,
-  // convertTMDBToLanguages,
+  convertTMDBToLanguages,
   GENRE_MAP,
   OTT_PLATFORMS 
 } from './tmdb';
 import { loadMoviesProgressively, getCachedMovies } from './movieCache';
+import { streamDiscoverAll, streamLanguageAll, fetchLanguageSeed } from './ingestion';
 
 // Seeded random number generator for deterministic shuffling
 function seededRandom(seed: number) {
@@ -31,6 +32,7 @@ export async function fetchFilteredMovies(preferences: {
   languages: Language[];
   adultContent: boolean;
   releaseYear?: number;
+  highRatedOnly?: boolean;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
     console.log('Fetching movies from TMDB with preferences:', preferences);
@@ -48,24 +50,79 @@ export async function fetchFilteredMovies(preferences: {
     const languagesToUse: Language[] = [];
 
     let movies: Movie[] = [];
-    // Language filters disabled: fetch maximum variety always
-    console.log('Fetching a fast batch of movies from TMDB');
-    // Faster initial load: trending first, then supplement with a small popular slice
+    // Kick off background ingestion: if user selected languages, seed by language; else global discover
+    console.log('Starting progressive ingestion from TMDB discover (background)...');
+    try {
+      if (preferences.languages && preferences.languages.length > 0) {
+        // Fast seed: fetch first pages for each selected language immediately
+        try {
+          const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+          const seeds = await Promise.all(
+            preferences.languages
+              .map(l => languageCodes[l as any])
+              .filter(Boolean)
+              .map(code => fetchLanguageSeed(code as string, 6, !!preferences.adultContent))
+          );
+          const seedMovies = seeds.flat();
+          if (seedMovies.length > 0) {
+            movies = [...movies, ...seedMovies];
+            onProgress?.(movies, false);
+          }
+        } catch {}
+        const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+        preferences.languages.forEach((lang) => {
+          const code = languageCodes[lang as any];
+          if (!code) return;
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
+            if (chunk.length) {
+              movies = [...movies, ...chunk];
+              onProgress?.(movies, isComplete);
+            }
+          });
+        });
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        streamDiscoverAll({ language: 'en-US', adult: !!preferences.adultContent }, (chunk, isComplete) => {
+          if (chunk.length) {
+            movies = [...movies, ...chunk];
+            onProgress?.(movies, isComplete);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to start background ingestion:', e);
+    }
+
+    // Return a fast first batch immediately using trending + popular
     let trending: Movie[] = [];
     let popular: Movie[] = [];
-    try {
-      trending = await fetchTrendingMovies('week', 1);
-    } catch (e) {
-      console.warn('Trending fetch failed, continuing with popular:', e);
-    }
-    try {
-      popular = await fetchPopularMovies(1, ['en-US']);
-    } catch (e) {
-      console.warn('Popular fetch failed:', e);
-    }
+    try { trending = await fetchTrendingMovies('week', 1); } catch {}
+    try { popular = await fetchPopularMovies(1, ['en-US']); } catch {}
     movies = [...trending, ...popular].slice(0, 200);
-    console.log('Fast batch movies fetched:', movies.length);
     
+    // If user picked specific genres and our fast path didn't yield enough,
+    // fetch by those genres directly from TMDB and intersect (AND logic)
+    if (preferences.genres && preferences.genres.length > 0) {
+      try {
+        // Use TMDB discover with multi-genre to improve recall
+        const ids = preferences.genres
+          .map(g => Object.keys(GENRE_MAP).find(id => GENRE_MAP[parseInt(id)] === g))
+          .filter(Boolean)
+          .map(x => parseInt(x as string));
+        if (ids.length > 0) {
+          const { fetchMoviesByGenresAND } = await import('./tmdb');
+          const andMovies = await fetchMoviesByGenresAND(ids, 6, 'en-US');
+          if (andMovies.length > 0) {
+            console.log(`Genre AND discover produced ${andMovies.length} movies`);
+            movies = [...movies, ...andMovies];
+          }
+        }
+      } catch (e) {
+        console.warn('Genre AND fallback failed:', e);
+      }
+    }
+
     // Fallback: if no movies were fetched, try trending movies
     if (movies.length === 0) {
       console.log('No movies from fast path, trying trending fallback');
@@ -82,11 +139,23 @@ export async function fetchFilteredMovies(preferences: {
     if (!preferences.adultContent) {
       movies = movies.filter(movie => !movie.adult);
     }
+    // High rated only
+    if (preferences.highRatedOnly) {
+      movies = movies.filter(movie => (movie.rating || 0) >= 8);
+    }
     
-    // Apply date filtering
-    if (preferences.releaseYear) {
-      movies = movies.filter(movie => movie.year >= preferences.releaseYear!);
-      console.log(`Filtered by year ${preferences.releaseYear}: ${movies.length} movies`);
+    // Release year filtering (supports preset buckets)
+    const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
+      if (filter === null || filter === undefined) return true;
+      if (typeof filter === 'number') return year >= filter;
+      if (filter === '2025') return year >= 2023; // treat as recent
+      if (filter === '2000s') return year >= 2000 && year < 2010;
+      if (filter === 'older') return year < 2000;
+      return true;
+    };
+    if (preferences.releaseYear !== undefined && preferences.releaseYear !== null) {
+      movies = movies.filter(movie => matchesRelease(movie.year, preferences.releaseYear as any));
+      console.log(`Filtered by release ${preferences.releaseYear}: ${movies.length} movies`);
     }
     
     // Remove duplicates based on movie ID
@@ -128,6 +197,8 @@ export function filterMovies(movies: Movie[], preferences: {
   ottPlatforms: OTTPlatform[];
   languages: Language[];
   adultContent: boolean;
+  releaseYear?: number | '2025' | '2000s' | 'older' | null;
+  highRatedOnly?: boolean;
 }, seed?: number): Movie[] {
   console.log('Filtering movies:', movies.length, 'movies with preferences:', preferences);
   
@@ -154,7 +225,28 @@ export function filterMovies(movies: Movie[], preferences: {
       if (!hasAllPlatforms) return false;
     }
     
-    // Language filter removed
+    // High rated only filter
+    if (preferences.highRatedOnly) {
+      if ((movie.rating || 0) < 8) return false;
+    }
+
+    // Release year filter
+    const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
+      if (filter === null || filter === undefined) return true;
+      if (typeof filter === 'number') return year >= filter;
+      if (filter === '2025') return year >= 2023;
+      if (filter === '2000s') return year >= 2000 && year < 2010;
+      if (filter === 'older') return year < 2000;
+      return true;
+    };
+    if (!matchesRelease(movie.year, preferences.releaseYear)) return false;
+
+    // Language filter (OR across selected languages)
+    if (preferences.languages && preferences.languages.length > 0) {
+      const movieLanguage = convertTMDBToLanguages(movie.original_language || 'en');
+      const hasMatchingLanguage = preferences.languages.includes(movieLanguage as Language);
+      if (!hasMatchingLanguage) return false;
+    }
     
     // Year filter - commented out since we're not passing releaseYear in simplified preferences
     // if (preferences.releaseYear) {

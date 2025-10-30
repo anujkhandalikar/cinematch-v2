@@ -75,15 +75,31 @@ export default function Home() {
             });
             if (instant.length > 0 && movies.length === 0) {
               console.log('⚡ Showing instant local deck');
-              loadMovies(filterMovies(instant, preferences, seed));
+              let instantFiltered = filterMovies(instant, preferences, seed);
+              // If filters are too strict (e.g., rare genre AND), show unfiltered instant deck first
+              if (instantFiltered.length === 0) {
+                const relaxedPrefs = { ...preferences, genres: [], ottPlatforms: [] } as any;
+                instantFiltered = filterMovies(instant, relaxedPrefs, seed).slice(0, 60);
+                console.log('⚡ Using relaxed instant deck for perceived speed');
+              }
+              loadMovies(instantFiltered);
             }
             // Convert preferences to match fetchFilteredMovies signature
+            const onProgress = (m: any[], isComplete: boolean) => {
+              const filteredChunk = filterMovies(m, preferences, preferences);
+              if (filteredChunk.length > movies.length) {
+                // Append by replacing with larger list; preserves current index
+                const setMovies = useStore.getState().setMovies;
+                setMovies(filteredChunk);
+              }
+            };
             const fetchedMovies = await fetchFilteredMovies({
               genres: preferences.genres,
               ottPlatforms: preferences.ottPlatforms,
               adultContent: preferences.adultContent,
               languages: preferences.languages,
-            });
+              highRatedOnly: preferences.highRatedOnly,
+            }, onProgress);
             console.log('📥 Fetched movies:', fetchedMovies.length);
             
             const filtered = filterMovies(fetchedMovies, preferences, seed);
@@ -170,18 +186,32 @@ export default function Home() {
           });
           if (instant.length > 0 && movies.length === 0) {
             console.log('⚡ Showing instant local deck (unified path)');
-            loadMovies(filterMovies(instant, prefsToUse, seed));
+            let instantFiltered = filterMovies(instant, prefsToUse, seed);
+            if (instantFiltered.length === 0) {
+              const relaxedPrefs = { ...prefsToUse, genres: [], ottPlatforms: [] } as any;
+              instantFiltered = filterMovies(instant, relaxedPrefs, seed).slice(0, 60);
+              console.log('⚡ Using relaxed instant deck (unified) for perceived speed');
+            }
+            loadMovies(instantFiltered);
           }
           
           // Fetch movies from TMDB with preferences
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
+          const onProgress = (m: any[], isComplete: boolean) => {
+            const filteredChunk = filterMovies(m, prefsToUse, prefsToUse);
+            if (filteredChunk.length > movies.length) {
+              const setMovies = useStore.getState().setMovies;
+              setMovies(filteredChunk);
+            }
+          };
           const fetchedMovies = await fetchFilteredMovies({
             genres: prefsToUse.genres,
             ottPlatforms: prefsToUse.ottPlatforms,
             languages: prefsToUse.languages,
             adultContent: prefsToUse.adultContent,
-          });
+            highRatedOnly: prefsToUse.highRatedOnly,
+          }, onProgress);
           console.log('📥 Fetched movies:', fetchedMovies.length);
           console.log('🎲 Using seed:', seed);
           console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));

@@ -25,6 +25,7 @@ export interface UserPreferences {
   languages: Language[];
   adultContent: boolean;
   releaseYear: '2025' | '2000s' | 'older' | null;
+  highRatedOnly?: boolean; // Only show movies with rating >= 8
 }
 
 interface Session {
@@ -123,6 +124,7 @@ const initialPreferences: UserPreferences = {
   languages: [],
   adultContent: false,
   releaseYear: null,
+  highRatedOnly: false,
 };
 
 export const useStore = create<AppState>((set) => ({
@@ -173,7 +175,8 @@ export const useStore = create<AppState>((set) => ({
     ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
     languages: [...new Set([...creatorPrefs.languages, ...joinerPrefs.languages])],
     adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
-    releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null
+    releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null,
+    highRatedOnly: !!(creatorPrefs.highRatedOnly || joinerPrefs.highRatedOnly)
   }),
   
   timerStart: null,

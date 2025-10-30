@@ -340,7 +340,8 @@ export function getCachedMovies(preferences: {
   genres: Genre[];
   ottPlatforms: OTTPlatform[];
   adultContent: boolean;
-  releaseYear?: number;
+  releaseYear?: number | '2025' | '2000s' | 'older' | null;
+  highRatedOnly?: boolean;
 }): Movie[] {
   const cacheKey = JSON.stringify(preferences);
   
@@ -367,12 +368,25 @@ export function getCachedMovies(preferences: {
       preferences.genres.every((selected) => movie.genres.includes(selected))
     );
   }
+  // High rated filter
+  if (preferences.highRatedOnly) {
+    movies = movies.filter(movie => (movie.rating || 0) >= 8);
+  }
+  // Release year filter (optional)
+  const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
+    if (filter === null || filter === undefined) return true;
+    if (typeof filter === 'number') return year >= filter;
+    if (filter === '2025') return year >= 2023;
+    if (filter === '2000s') return year >= 2000 && year < 2010;
+    if (filter === 'older') return year < 2000;
+    return true;
+  };
+  if (preferences.releaseYear !== undefined && preferences.releaseYear !== null) {
+    movies = movies.filter(movie => matchesRelease(movie.year, preferences.releaseYear));
+  }
   
   // Apply date filtering
-  if (preferences.releaseYear) {
-    movies = movies.filter(movie => movie.year >= preferences.releaseYear!);
-    console.log(`Filtered by year ${preferences.releaseYear}: ${movies.length} movies`);
-  }
+  // Date filtering removed per request
   
   // Cache the result
   movieCache.set(cacheKey, movies);

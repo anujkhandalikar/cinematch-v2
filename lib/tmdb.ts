@@ -664,6 +664,35 @@ export async function fetchMoviesByGenre(genreId: number, page: number = 1): Pro
   }
 }
 
+// Fetch movies that match ALL provided genres using TMDB discover with multi-genre
+// Fetches several pages to improve recall for strict AND queries
+export async function fetchMoviesByGenresAND(genreIds: number[], pages: number = 5, language: string = 'en-US'): Promise<any[]> {
+  try {
+    if (!genreIds.length) return [];
+    const pagesArr = Array.from({ length: pages }, (_, i) => i + 1);
+    const promises = pagesArr.map((p, index) => {
+      const genreParam = genreIds.join(',');
+      const endpoint = encodeURIComponent(`/discover/movie?with_genres=${genreParam}&page=${p}&language=${language}&sort_by=popularity.desc`);
+      const url = `${API_BASE_URL}?endpoint=${endpoint}`;
+      return fetchWithTimeout(url, 12000).then(
+        response => ({ response, pageIndex: index }),
+        () => ({ response: null as any, pageIndex: index })
+      );
+    });
+    const responses = await Promise.all(promises);
+    const successful = responses.filter(r => r.response && r.response.ok);
+    if (!successful.length) return [];
+    const dataPromises = successful.map(({ response }) => response.json());
+    const allData = await Promise.all(dataPromises);
+    const allMovies = allData.flatMap(d => (d.results || []));
+    const unique = allMovies.filter((m, i, s) => i === s.findIndex(x => x.id === m.id));
+    return unique.map(convertTMDBMovie);
+  } catch (e) {
+    console.warn('Error fetching AND genres via discover:', e);
+    return [];
+  }
+}
+
 // Search movies
 export async function searchMovies(query: string, page: number = 1): Promise<any[]> {
   try {
