@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useStore } from '@/lib/store';
+import { useStore, UserPreferences } from '@/lib/store';
 import { fetchFilteredMovies } from '@/lib/movies';
 
 export default function ReadyScreen() {
@@ -148,17 +148,14 @@ export default function ReadyScreen() {
       setIsPreloadingMovies(true);
       
       // Get combined preferences
-      const rawPreferences = session.combinedPreferences || session.creatorPreferences || {
-        genres: [],
-        ottPlatforms: [],
-        adultContent: false
-      };
-      
-      // Convert preferences to match fetchFilteredMovies signature
+      const base = (session.combinedPreferences || session.creatorPreferences) as Partial<UserPreferences> | undefined;
       const preferences = {
-        genres: rawPreferences.genres,
-        ottPlatforms: rawPreferences.ottPlatforms,
-        adultContent: rawPreferences.adultContent,
+        genres: base?.genres ?? [],
+        ottPlatforms: base?.ottPlatforms ?? [],
+        languages: base?.languages ?? [],
+        adultContent: base?.adultContent ?? false,
+        releaseYear: typeof base?.releaseYear === 'number' ? base?.releaseYear : undefined,
+        highRatedOnly: base?.highRatedOnly ?? false,
       };
       
       // Preload movies in background
