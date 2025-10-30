@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
+import { convertTMDBToLanguages } from '@/lib/tmdb';
 import { getCachedMovies } from '@/lib/movieCache';
 import { sessionService } from '@/lib/supabase';
 import HomeScreen from './components/HomeScreen';
@@ -106,6 +107,18 @@ export default function Home() {
             console.log('📥 Fetched movies:', fetchedMovies.length);
             
             let filtered = filterMovies(fetchedMovies, preferences, seed);
+            // Hard fallback: if only language is selected and results are tiny,
+            // keep language-only list to maximize deck size.
+            if (preferences.languages?.length > 0 &&
+                (preferences.genres?.length ?? 0) === 0 &&
+                (preferences.ottPlatforms?.length ?? 0) === 0 &&
+                filtered.length < 20) {
+              filtered = fetchedMovies.filter(m =>
+                preferences.languages.includes(
+                  convertTMDBToLanguages((m as any).original_language || 'en') as any
+                )
+              );
+            }
             if (preferences.languages && preferences.languages.length > 0 && filtered.length < 20) {
               const relaxed = { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any;
               filtered = filterMovies(fetchedMovies, relaxed, seed);
@@ -229,7 +242,17 @@ export default function Home() {
           const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0)
             ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
             : prefsToUse;
-          const filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
+          let filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
+          if (prefsToUse.languages?.length > 0 &&
+              (prefsToUse.genres?.length ?? 0) === 0 &&
+              (prefsToUse.ottPlatforms?.length ?? 0) === 0 &&
+              filtered.length < 20) {
+            filtered = fetchedMovies.filter(m =>
+              prefsToUse.languages.includes(
+                convertTMDBToLanguages((m as any).original_language || 'en') as any
+              )
+            );
+          }
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs AFTER shuffle:', filtered.slice(0, 5).map(m => m.id));
