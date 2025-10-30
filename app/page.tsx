@@ -94,8 +94,8 @@ export default function Home() {
                 ? { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
                 : preferences;
               const filteredChunk = filterMovies(m, langRelaxed, seed);
-              const setMovies = useStore.getState().setMovies;
-              setMovies(filteredChunk);
+              const loadMoviesFn = useStore.getState().loadMovies;
+              loadMoviesFn(filteredChunk);
             };
             const fetchedMovies = await fetchFilteredMovies({
               genres: preferences.genres,
@@ -224,8 +224,8 @@ export default function Home() {
               ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
               : prefsToUse;
             const filteredChunk = filterMovies(m, langRelaxed, seed);
-            const setMovies = useStore.getState().setMovies;
-            setMovies(filteredChunk);
+            const loadMoviesFn = useStore.getState().loadMovies;
+            loadMoviesFn(filteredChunk);
           };
           const fetchedMovies = await fetchFilteredMovies({
             genres: prefsToUse.genres,
