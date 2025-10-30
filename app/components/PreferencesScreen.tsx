@@ -14,6 +14,8 @@ const OTT_PLATFORMS: OTTPlatform[] = [
   'Apple TV+', 'Paramount+', 'Peacock'
 ];
 
+// Language filters removed
+
 export default function PreferencesScreen() {
   const preferences = useStore((state) => state.preferences);
   const setPreferences = useStore((state) => state.setPreferences);
@@ -21,6 +23,7 @@ export default function PreferencesScreen() {
   
   const [selectedGenres, setSelectedGenres] = useState<Genre[]>(preferences.genres);
   const [selectedPlatforms, setSelectedPlatforms] = useState<OTTPlatform[]>(preferences.ottPlatforms);
+  // Languages removed from UI; will be ignored in logic
   const [adultContent, setAdultContent] = useState(preferences.adultContent);
   const [releaseYear, setReleaseYear] = useState<'2025' | '2000s' | 'older' | null>(preferences.releaseYear);
 
@@ -40,10 +43,13 @@ export default function PreferencesScreen() {
     );
   };
 
+  // No-op: languages removed
+
   const handleContinue = () => {
     const newPreferences = {
       genres: selectedGenres,
       ottPlatforms: selectedPlatforms,
+      languages: [],
       adultContent,
       releaseYear
     };
@@ -51,7 +57,14 @@ export default function PreferencesScreen() {
     console.log('Selected release year:', releaseYear);
     console.log('Full preferences being saved:', newPreferences);
     setPreferences(newPreferences);
-    setCurrentScreen('mode');
+    const mode = (useStore.getState() as any).selectedMode;
+    if (mode === 'single') {
+      setCurrentScreen('swipe');
+    } else if (mode === 'dual') {
+      setCurrentScreen('session');
+    } else {
+      setCurrentScreen('mode');
+    }
   };
 
   return (
@@ -88,6 +101,8 @@ export default function PreferencesScreen() {
               ))}
             </div>
           </div>
+
+          {/* Languages Section removed */}
 
           {/* Genres Section */}
           <div className="mb-8">

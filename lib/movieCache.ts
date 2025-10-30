@@ -361,6 +361,12 @@ export function getCachedMovies(preferences: {
   if (!preferences.adultContent) {
     movies = movies.filter(movie => !movie.adult);
   }
+  // Genres AND logic: movie must include all selected genres
+  if (preferences.genres && preferences.genres.length > 0) {
+    movies = movies.filter(movie =>
+      preferences.genres.every((selected) => movie.genres.includes(selected))
+    );
+  }
   
   // Apply date filtering
   if (preferences.releaseYear) {

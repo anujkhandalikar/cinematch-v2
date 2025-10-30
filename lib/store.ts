@@ -3,6 +3,7 @@ import { sessionService, likesService, matchesService, Session as SupabaseSessio
 
 export type Genre = 'Action' | 'Adventure' | 'Animation' | 'Biography' | 'Comedy' | 'Crime' | 'Documentary' | 'Drama' | 'Family' | 'Fantasy' | 'History' | 'Horror' | 'Music' | 'Mystery' | 'Romance' | 'Sci-Fi' | 'Thriller' | 'War' | 'Western';
 export type OTTPlatform = 'Netflix' | 'Prime Video' | 'Hotstar' | 'Disney+' | 'HBO Max' | 'Hulu' | 'Apple TV+' | 'Paramount+' | 'Peacock';
+export type Language = 'English' | 'Hindi' | 'Spanish' | 'French' | 'German' | 'Italian' | 'Portuguese' | 'Russian' | 'Chinese' | 'Japanese' | 'Korean' | 'Arabic' | 'Turkish' | 'Dutch' | 'Swedish' | 'Norwegian' | 'Danish' | 'Finnish' | 'Polish' | 'Czech' | 'Hungarian' | 'Romanian' | 'Bulgarian' | 'Croatian' | 'Serbian' | 'Slovak' | 'Slovenian' | 'Greek' | 'Hebrew' | 'Thai' | 'Vietnamese' | 'Indonesian' | 'Malay' | 'Filipino' | 'Bengali' | 'Tamil' | 'Telugu' | 'Marathi' | 'Gujarati' | 'Punjabi' | 'Urdu' | 'Kannada' | 'Malayalam';
 
 export interface Movie {
   id: string;
@@ -15,11 +16,13 @@ export interface Movie {
   poster_url: string;
   synopsis: string;
   adult?: boolean;
+  original_language?: string;
 }
 
 export interface UserPreferences {
   genres: Genre[];
   ottPlatforms: OTTPlatform[];
+  languages: Language[];
   adultContent: boolean;
   releaseYear: '2025' | '2000s' | 'older' | null;
 }
@@ -93,6 +96,9 @@ interface AppState {
   // App flow
   currentScreen: 'home' | 'preferences' | 'mode' | 'session' | 'ready' | 'loading' | 'swipe' | 'shortlist';
   setCurrentScreen: (screen: AppState['currentScreen']) => void;
+  // Pre-session selection
+  selectedMode: 'single' | 'dual' | null;
+  setSelectedMode: (mode: 'single' | 'dual' | null) => void;
   
   // Supabase integration methods
   createSupabaseSession: (mode: 'single' | 'dual', preferences: UserPreferences) => Promise<void>;
@@ -114,6 +120,7 @@ interface AppState {
 const initialPreferences: UserPreferences = {
   genres: [],
   ottPlatforms: [],
+  languages: [],
   adultContent: false,
   releaseYear: null,
 };
@@ -164,6 +171,7 @@ export const useStore = create<AppState>((set) => ({
   combinePreferences: (creatorPrefs, joinerPrefs) => ({
     genres: [...new Set([...creatorPrefs.genres, ...joinerPrefs.genres])],
     ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
+    languages: [...new Set([...creatorPrefs.languages, ...joinerPrefs.languages])],
     adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
     releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null
   }),
@@ -174,6 +182,8 @@ export const useStore = create<AppState>((set) => ({
   
   currentScreen: 'home',
   setCurrentScreen: (screen) => set({ currentScreen: screen }),
+  selectedMode: null,
+  setSelectedMode: (mode) => set({ selectedMode: mode }),
   
   // Fallback session creation (without Supabase)
   createFallbackSession: (mode: 'single' | 'dual', preferences: UserPreferences) => {

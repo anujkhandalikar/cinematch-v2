@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store';
 
 export default function ModeSelectionScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
+  const setSelectedMode = useStore((state) => (state as any).setSelectedMode);
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
@@ -22,7 +23,7 @@ export default function ModeSelectionScreen() {
         <div className="space-y-6 mb-12">
           {/* Single Mode */}
           <button
-            onClick={() => setCurrentScreen('swipe')}
+            onClick={() => { setSelectedMode && setSelectedMode('single'); setCurrentScreen('preferences'); }}
             className="w-full p-8 bg-gray-900 rounded-2xl text-left hover:bg-gray-800 transition-all group"
           >
             <div className="flex items-center gap-6">
@@ -43,7 +44,7 @@ export default function ModeSelectionScreen() {
 
           {/* Dual Mode */}
           <button
-            onClick={() => setCurrentScreen('session')}
+            onClick={() => { setSelectedMode && setSelectedMode('dual'); setCurrentScreen('preferences'); }}
             className="w-full p-8 bg-gray-900 rounded-2xl text-left hover:bg-gray-800 transition-all group"
           >
             <div className="flex items-center gap-6">
@@ -65,10 +66,10 @@ export default function ModeSelectionScreen() {
 
         {/* Back Button */}
         <button
-          onClick={() => setCurrentScreen('preferences')}
+          onClick={() => setCurrentScreen('home')}
           className="text-gray-400 hover:text-white transition-colors"
         >
-          ← Back to Preferences
+          ← Back to Home
         </button>
       </div>
     </div>

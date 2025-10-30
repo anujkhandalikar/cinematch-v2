@@ -30,7 +30,7 @@ export default function HomeScreen() {
 
         {/* CTA Button */}
         <button
-          onClick={() => setCurrentScreen('preferences')}
+          onClick={() => setCurrentScreen('mode')}
           className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-lg text-lg hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation mb-6"
         >
           Start

@@ -1,8 +1,9 @@
 // TMDB API integration for movie data
-// Using server-side proxy to hide API key from client
+// All outbound calls go through our server proxy at /api/movies to
+// keep credentials out of the client and centralize error handling.
 const API_BASE_URL = '/api/movies';
 
-// Fetch with timeout helper - aggressive timeout for mobile networks
+// Fetch with timeout helper — keeps UI responsive on slow networks
 function fetchWithTimeout(url: string, timeoutMs: number = 15000): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -48,7 +49,7 @@ export interface TMDBResponse<T> {
   total_results: number;
 }
 
-// Genre mapping for better user experience
+// Genre mapping for better user experience (TMDB id -> friendly name)
 export const GENRE_MAP: Record<number, string> = {
   28: 'Action',
   12: 'Adventure',
@@ -71,19 +72,124 @@ export const GENRE_MAP: Record<number, string> = {
   37: 'Western'
 };
 
-// OTT platform mapping (simplified - in production, you'd use a service like JustWatch)
-export const OTT_PLATFORMS = [
-  'Netflix',
-  'Prime Video', 
-  'Disney+',
-  'HBO Max',
-  'Hulu',
-  'Apple TV+',
-  'Paramount+',
-  'Peacock'
-];
+// Language mapping for TMDB API
+export const LANGUAGE_MAP: Record<string, string> = {
+  'English': 'en-US',
+  'Hindi': 'hi-IN',
+  'Spanish': 'es-ES',
+  'French': 'fr-FR',
+  'German': 'de-DE',
+  'Italian': 'it-IT',
+  'Portuguese': 'pt-PT',
+  'Russian': 'ru-RU',
+  'Chinese': 'zh-CN',
+  'Japanese': 'ja-JP',
+  'Korean': 'ko-KR',
+  'Arabic': 'ar-SA',
+  'Turkish': 'tr-TR',
+  'Dutch': 'nl-NL',
+  'Swedish': 'sv-SE',
+  'Norwegian': 'no-NO',
+  'Danish': 'da-DK',
+  'Finnish': 'fi-FI',
+  'Polish': 'pl-PL',
+  'Czech': 'cs-CZ',
+  'Hungarian': 'hu-HU',
+  'Romanian': 'ro-RO',
+  'Bulgarian': 'bg-BG',
+  'Croatian': 'hr-HR',
+  'Serbian': 'sr-RS',
+  'Slovak': 'sk-SK',
+  'Slovenian': 'sl-SI',
+  'Greek': 'el-GR',
+  'Hebrew': 'he-IL',
+  'Thai': 'th-TH',
+  'Vietnamese': 'vi-VN',
+  'Indonesian': 'id-ID',
+  'Malay': 'ms-MY',
+  'Filipino': 'tl-PH',
+  'Bengali': 'bn-BD',
+  'Tamil': 'ta-IN',
+  'Telugu': 'te-IN',
+  'Marathi': 'mr-IN',
+  'Gujarati': 'gu-IN',
+  'Punjabi': 'pa-IN',
+  'Urdu': 'ur-PK'
+};
+
+// Convert Language array to TMDB language codes
+export function convertLanguagesToTMDB(languages: string[]): string[] {
+  // Handle undefined/null languages array
+  if (!languages || !Array.isArray(languages) || languages.length === 0) {
+    return ['en-US']; // Default to English if no languages selected
+  }
+  
+  const tmdbLanguages = languages.map(lang => LANGUAGE_MAP[lang] || 'en-US');
+  // Remove duplicates and ensure we have at least English as fallback
+  const uniqueLanguages = [...new Set(tmdbLanguages)];
+  return uniqueLanguages.length > 0 ? uniqueLanguages : ['en-US'];
+}
+
+// Convert TMDB language codes back to our Language types
+export function convertTMDBToLanguages(tmdbLanguage: string): string {
+  const reverseMap: Record<string, string> = {};
+  Object.entries(LANGUAGE_MAP).forEach(([lang, code]) => {
+    reverseMap[code] = lang;
+  });
+  
+  // Handle common TMDB language codes that might not be in our map
+  const commonMappings: Record<string, string> = {
+    'hi': 'Hindi',
+    'en': 'English', 
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ru': 'Russian',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'ar': 'Arabic',
+    'tr': 'Turkish',
+    'nl': 'Dutch',
+    'sv': 'Swedish',
+    'no': 'Norwegian',
+    'da': 'Danish',
+    'fi': 'Finnish',
+    'pl': 'Polish',
+    'cs': 'Czech',
+    'hu': 'Hungarian',
+    'ro': 'Romanian',
+    'bg': 'Bulgarian',
+    'hr': 'Croatian',
+    'sr': 'Serbian',
+    'sk': 'Slovak',
+    'sl': 'Slovenian',
+    'el': 'Greek',
+    'he': 'Hebrew',
+    'th': 'Thai',
+    'vi': 'Vietnamese',
+    'id': 'Indonesian',
+    'ms': 'Malay',
+    'tl': 'Filipino',
+    'bn': 'Bengali',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'mr': 'Marathi',
+    'gu': 'Gujarati',
+    'pa': 'Punjabi',
+    'ur': 'Urdu',
+    'kn': 'Kannada',
+    'ml': 'Malayalam'
+  };
+  
+  // Try exact match first, then try common mappings
+  return reverseMap[tmdbLanguage] || commonMappings[tmdbLanguage] || 'English';
+}
 
 // Assign realistic OTT platforms based on movie characteristics
+// (This is heuristic/demo logic, not real availability.)
 function assignOTTPlatforms(movie: TMDBMovie): string[] {
   const platforms: string[] = [];
   
@@ -153,6 +259,7 @@ function assignOTTPlatforms(movie: TMDBMovie): string[] {
 }
 
 // Fetch individual movie details to get runtime
+// (Used by the slower path; the fast path estimates runtime.)
 async function fetchMovieDetails(movieId: number): Promise<number> {
   try {
     const endpoint = encodeURIComponent(`/movie/${movieId}?language=en-US`);
@@ -186,7 +293,8 @@ export function convertTMDBMovie(tmdbMovie: TMDBMovie): any {
       ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Image',
     synopsis: tmdbMovie.overview || 'No description available',
-    adult: tmdbMovie.adult
+    adult: tmdbMovie.adult,
+    original_language: tmdbMovie.original_language
   };
 }
 
@@ -277,30 +385,139 @@ export async function convertTMDBMovieWithRuntime(tmdbMovie: TMDBMovie): Promise
   };
 }
 
-// Fetch movies from multiple sources for maximum variety
-export async function fetchMaximumMovies(): Promise<any[]> {
+// Fetch Hindi movies specifically using discover endpoint
+export async function fetchHindiMovies(): Promise<any[]> {
   try {
-    console.log('Fetching maximum movies from multiple sources...');
+    console.log('Fetching Hindi movies using discover endpoint...');
+    
+    const endpoints = [];
+    
+    // Discover Hindi movies by different criteria
+    const discoverQueries = [
+      'primary_release_date.gte=2020-01-01&primary_release_date.lte=2024-12-31', // Recent
+      'primary_release_date.gte=2015-01-01&primary_release_date.lte=2019-12-31', // Mid-2010s
+      'primary_release_date.gte=2010-01-01&primary_release_date.lte=2014-12-31', // Early 2010s
+      'primary_release_date.gte=2005-01-01&primary_release_date.lte=2009-12-31', // Late 2000s
+      'vote_count.gte=100&sort_by=vote_average.desc', // Highly rated
+      'sort_by=popularity.desc', // Most popular
+    ];
+    
+    discoverQueries.forEach(query => {
+      endpoints.push(...Array.from({length: 3}, (_, i) => {
+        const endpoint = encodeURIComponent(`/discover/movie?page=${i+1}&language=hi-IN&${query}`);
+        return `${API_BASE_URL}?endpoint=${endpoint}`;
+      }));
+    });
+    
+    console.log(`Fetching Hindi movies from ${endpoints.length} discover endpoints...`);
+    
+    const batchSize = 2;
+    const allMovies = [];
+    
+    for (let i = 0; i < endpoints.length; i += batchSize) {
+      const batch = endpoints.slice(i, i + batchSize);
+      console.log(`Fetching Hindi batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(endpoints.length/batchSize)}`);
+      
+      try {
+        const promises = batch.map(async (url) => {
+          try {
+            const response = await fetch(url);
+            if (!response.ok) {
+              console.warn(`Hindi endpoint failed with status ${response.status}: ${url}`);
+              return []; // Return empty array instead of throwing
+            }
+            const data = await response.json();
+            return data.results || [];
+          } catch (error) {
+            console.warn(`Hindi endpoint network error: ${url}`, error);
+            return []; // Return empty array instead of throwing
+          }
+        });
+        
+        const batchResults = await Promise.all(promises);
+        const batchMovies = batchResults.flat();
+        allMovies.push(...batchMovies);
+        
+        console.log(`Hindi batch ${Math.floor(i/batchSize) + 1} completed: ${batchMovies.length} movies`);
+        
+        // Delay between batches
+        if (i + batchSize < endpoints.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } catch (error) {
+        console.error(`Error in Hindi batch ${Math.floor(i/batchSize) + 1}:`, error);
+        // Continue with next batch
+      }
+    }
+    
+    console.log(`Total Hindi movies fetched: ${allMovies.length}`);
+    return allMovies;
+  } catch (error) {
+    console.error('Error fetching Hindi movies:', error);
+    return [];
+  }
+}
+
+// Fetch movies from multiple sources for maximum variety
+// We combine multiple TMDB endpoints via the proxy and then
+// de-duplicate and convert them to our Movie shape.
+export async function fetchMaximumMovies(languages: string[] = ['en-US']): Promise<any[]> {
+  try {
+    console.log('Fetching maximum movies from multiple sources for languages:', languages);
     
     // Use multiple endpoints with many pages to get 1000+ movies
     // Reduced endpoints for better mobile network performance
-    const endpoints = [
-      // Popular movies (5 pages = 100 movies)
-      ...Array.from({length: 5}, (_, i) => {
-        const endpoint = encodeURIComponent(`/movie/popular?page=${i+1}&language=en-US`);
+    const endpoints = [];
+    
+    // Create endpoints for each language, but limit to avoid too many requests
+    for (const language of languages.slice(0, 3)) { // Limit to first 3 languages to avoid too many requests
+      // Popular movies (3 pages = 60 movies per language)
+      endpoints.push(...Array.from({length: 3}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/popular?page=${i+1}&language=${language}`);
         return `${API_BASE_URL}?endpoint=${endpoint}`;
-      }),
-      // Top rated movies (3 pages = 60 movies)
-      ...Array.from({length: 3}, (_, i) => {
-        const endpoint = encodeURIComponent(`/movie/top_rated?page=${i+1}&language=en-US`);
+      }));
+      // Top rated movies (2 pages = 40 movies per language)
+      endpoints.push(...Array.from({length: 2}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/top_rated?page=${i+1}&language=${language}`);
         return `${API_BASE_URL}?endpoint=${endpoint}`;
-      })
-    ];
+      }));
+      
+      // Now playing movies (2 pages = 40 movies per language) - more diverse content
+      endpoints.push(...Array.from({length: 2}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/now_playing?page=${i+1}&language=${language}`);
+        return `${API_BASE_URL}?endpoint=${endpoint}`;
+      }));
+      
+      // Upcoming movies (2 pages = 40 movies per language) - includes regional releases
+      endpoints.push(...Array.from({length: 2}, (_, i) => {
+        const endpoint = encodeURIComponent(`/movie/upcoming?page=${i+1}&language=${language}`);
+        return `${API_BASE_URL}?endpoint=${endpoint}`;
+      }));
+    }
+    
+    // Special handling for Hindi movies - use discover endpoint for better coverage
+    if (languages.includes('hi-IN')) {
+      console.log('Adding Hindi-specific discover endpoints for better coverage...');
+      // Discover Hindi movies by year ranges to get more variety
+      const hindiYears = [
+        { start: 2020, end: 2024 }, // Recent Hindi movies
+        { start: 2015, end: 2019 }, // Mid-2010s Hindi movies  
+        { start: 2010, end: 2014 }, // Early 2010s Hindi movies
+        { start: 2005, end: 2009 }, // Late 2000s Hindi movies
+      ];
+      
+      hindiYears.forEach(yearRange => {
+        endpoints.push(...Array.from({length: 2}, (_, i) => {
+          const endpoint = encodeURIComponent(`/discover/movie?page=${i+1}&language=hi-IN&primary_release_date.gte=${yearRange.start}-01-01&primary_release_date.lte=${yearRange.end}-12-31&sort_by=popularity.desc`);
+          return `${API_BASE_URL}?endpoint=${endpoint}`;
+        }));
+      });
+    }
     
     console.log(`Fetching from ${endpoints.length} endpoints (reduced for mobile performance)...`);
     
     // Smaller batch size for mobile networks
-    const batchSize = 3;
+    const batchSize = 2; // Reduced batch size for better reliability
     const allMovies = [];
     
     for (let i = 0; i < endpoints.length; i += batchSize) {
@@ -310,7 +527,7 @@ export async function fetchMaximumMovies(): Promise<any[]> {
       try {
         // Track page order to ensure deterministic results
         const promises = batch.map((url, urlIndex) => 
-          fetchWithTimeout(url, 15000).then(response => ({ response, urlIndex }))
+          fetchWithTimeout(url, 20000).then(response => ({ response, urlIndex }))
         );
         const responses = await Promise.all(promises);
         
@@ -325,9 +542,9 @@ export async function fetchMaximumMovies(): Promise<any[]> {
         
         console.log(`Batch ${Math.floor(i/batchSize) + 1} fetched ${batchMovies.length} movies`);
         
-        // Small delay between batches to avoid rate limiting
+        // Longer delay between batches to avoid rate limiting
         if (i + batchSize < endpoints.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       } catch (error) {
         console.warn(`Batch ${Math.floor(i/batchSize) + 1} failed:`, error);
@@ -356,7 +573,7 @@ export async function fetchMaximumMovies(): Promise<any[]> {
 }
 
 // Fetch popular movies
-export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
+export async function fetchPopularMovies(page: number = 1, languages: string[] = ['en-US']): Promise<any[]> {
   try {
     // Fetch more pages to get 1000+ movies
     // Fetch fewer pages for better performance (especially on mobile)
@@ -364,33 +581,35 @@ export async function fetchPopularMovies(page: number = 1): Promise<any[]> {
     const pages = Array.from({length: 10}, (_, i) => i + 1); // Fetch first 10 pages (200 movies)
     const allMovies = [];
     
-    // Fetch pages sequentially to avoid rate limiting
-    for (const pageNum of pages) {
-      try {
-        const endpoint = encodeURIComponent(`/movie/popular?page=${pageNum}&language=en-US`);
-        const url = `${API_BASE_URL}?endpoint=${endpoint}`;
-        console.log(`Fetching page ${pageNum}...`);
-        
-        const response = await fetchWithTimeout(url, 15000);
-        
-        if (!response.ok) {
-          console.warn(`Page ${pageNum} failed with status: ${response.status}`);
-          continue;
+    // Fetch pages for each language
+    for (const language of languages) {
+      for (const pageNum of pages) {
+        try {
+          const endpoint = encodeURIComponent(`/movie/popular?page=${pageNum}&language=${language}`);
+          const url = `${API_BASE_URL}?endpoint=${endpoint}`;
+          console.log(`Fetching page ${pageNum} for language ${language}...`);
+          
+          const response = await fetchWithTimeout(url, 15000);
+          
+          if (!response.ok) {
+            console.warn(`Page ${pageNum} failed with status: ${response.status}`);
+            continue;
+          }
+          
+          const data = await response.json();
+          const movies = data.results || [];
+          allMovies.push(...movies);
+          
+          console.log(`Page ${pageNum} (${language}) fetched ${movies.length} movies`);
+          
+          // Small delay between requests to avoid rate limiting
+          if (pageNum < pages.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        } catch (error) {
+          console.warn(`Page ${pageNum} (${language}) failed:`, error);
+          // Continue with next page
         }
-        
-        const data = await response.json();
-        const movies = data.results || [];
-        allMovies.push(...movies);
-        
-        console.log(`Page ${pageNum} fetched ${movies.length} movies`);
-        
-        // Small delay between requests to avoid rate limiting
-        if (pageNum < pages.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-      } catch (error) {
-        console.warn(`Page ${pageNum} failed:`, error);
-        // Continue with next page
       }
     }
     
@@ -463,20 +682,21 @@ export async function searchMovies(query: string, page: number = 1): Promise<any
   }
 }
 
-// Fetch trending movies
+// Fetch trending movies — errors are treated as empty results to avoid UI noise
 export async function fetchTrendingMovies(timeWindow: 'day' | 'week' = 'week', page: number = 1): Promise<any[]> {
   try {
     const endpoint = encodeURIComponent(`/trending/movie/${timeWindow}?page=${page}&language=en-US`);
     const response = await fetchWithTimeout(`${API_BASE_URL}?endpoint=${endpoint}`, 15000);
     
     if (!response.ok) {
-      throw new Error(`TMDB API error: ${response.status}`);
+      console.warn(`Trending failed with ${response.status}; returning empty list`);
+      return [];
     }
     
     const data: TMDBResponse<TMDBMovie> = await response.json();
     return data.results.map(convertTMDBMovie);
   } catch (error) {
-    console.error('Error fetching trending movies:', error);
+    console.warn('Error fetching trending movies:', error);
     return [];
   }
 }

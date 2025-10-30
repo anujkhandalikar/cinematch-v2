@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
+import { getCachedMovies } from '@/lib/movieCache';
 import { sessionService } from '@/lib/supabase';
 import HomeScreen from './components/HomeScreen';
 import PreferencesScreen from './components/PreferencesScreen';
@@ -38,7 +39,9 @@ export default function Home() {
     }
   }, [currentScreen]);
 
-  // Load movies when session starts (simplified to prevent infinite loops)
+  // Load movies when the swipe screen becomes active
+  // We gate the effect to run once per visit to the swipe screen to
+  // avoid duplicate fetches or race conditions.
   useEffect(() => {
     // Only load if: on swipe screen, not already loading, haven't loaded yet, and no movies exist
     const shouldLoad = currentScreen === 'swipe' && !isLoadingMovies && !hasLoadedMovies.current && movies.length === 0;
@@ -63,18 +66,36 @@ export default function Home() {
             
             const seed = Math.random();
             console.log('🔍 Fetching movies from TMDB for single mode...');
-            // Convert preferences to match fetchFilteredMovies signature
-            const movies = await fetchFilteredMovies({
+            // Instant local deck to avoid spinner while TMDB loads
+            const instant = getCachedMovies({
               genres: preferences.genres,
               ottPlatforms: preferences.ottPlatforms,
               adultContent: preferences.adultContent,
+              releaseYear: preferences.releaseYear as any,
             });
-            console.log('📥 Fetched movies:', movies.length);
+            if (instant.length > 0 && movies.length === 0) {
+              console.log('⚡ Showing instant local deck');
+              loadMovies(filterMovies(instant, preferences, seed));
+            }
+            // Convert preferences to match fetchFilteredMovies signature
+            const fetchedMovies = await fetchFilteredMovies({
+              genres: preferences.genres,
+              ottPlatforms: preferences.ottPlatforms,
+              adultContent: preferences.adultContent,
+              languages: preferences.languages,
+            });
+            console.log('📥 Fetched movies:', fetchedMovies.length);
             
-            const filtered = filterMovies(movies, preferences, seed);
+            const filtered = filterMovies(fetchedMovies, preferences, seed);
             console.log('🎯 Filtered/shuffled movies:', filtered.length);
             console.log('📋 Loading movies into state');
-            loadMovies(filtered);
+            if (filtered.length === 0) {
+              console.warn('No movies available after fetch/filter. Showing error.');
+              setLoadError('No movies available right now. Please try again in a moment.');
+              loadMovies([]);
+            } else {
+              loadMovies(filtered);
+            }
             setIsLoadingMovies(false);
             return;
           }
@@ -140,21 +161,33 @@ export default function Home() {
             : preferences;
           
           console.log('Prefs to use:', prefsToUse);
+          // Instant local deck for dual/single unified path
+          const instant = getCachedMovies({
+            genres: prefsToUse.genres,
+            ottPlatforms: prefsToUse.ottPlatforms,
+            adultContent: prefsToUse.adultContent,
+            releaseYear: prefsToUse.releaseYear as any,
+          });
+          if (instant.length > 0 && movies.length === 0) {
+            console.log('⚡ Showing instant local deck (unified path)');
+            loadMovies(filterMovies(instant, prefsToUse, seed));
+          }
           
           // Fetch movies from TMDB with preferences
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
-          const movies = await fetchFilteredMovies({
+          const fetchedMovies = await fetchFilteredMovies({
             genres: prefsToUse.genres,
             ottPlatforms: prefsToUse.ottPlatforms,
+            languages: prefsToUse.languages,
             adultContent: prefsToUse.adultContent,
           });
-          console.log('📥 Fetched movies:', movies.length);
+          console.log('📥 Fetched movies:', fetchedMovies.length);
           console.log('🎲 Using seed:', seed);
-          console.log('🎥 First 5 movies BEFORE shuffle:', movies.slice(0, 5).map(m => m.title));
-          console.log('🎥 First 5 movie IDs BEFORE shuffle:', movies.slice(0, 5).map(m => m.id));
+          console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));
+          console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
-          const filtered = filterMovies(movies, prefsToUse, seed);
+          const filtered = filterMovies(fetchedMovies, prefsToUse, seed);
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs AFTER shuffle:', filtered.slice(0, 5).map(m => m.id));
@@ -181,7 +214,13 @@ export default function Home() {
           console.log('   Total:', filtered.length);
           console.log('   First 5 titles:', filtered.slice(0, 5).map(m => m.title));
           console.log('   First 5 IDs:', filtered.slice(0, 5).map(m => m.id));
-          loadMovies(filtered);
+          if (filtered.length === 0) {
+            console.warn('No movies available after fetch/filter (dual/single unified). Showing error.');
+            setLoadError('No movies available right now. Please try again in a moment.');
+            loadMovies([]);
+          } else {
+            loadMovies(filtered);
+          }
         } catch (error) {
           console.error('❌ Error loading movies:', error);
           const errorMessage = error instanceof Error ? error.message : 'Failed to load movies. Please check your connection and try again.';
