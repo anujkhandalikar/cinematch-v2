@@ -86,7 +86,7 @@ export default function Home() {
             }
             // Convert preferences to match fetchFilteredMovies signature
             const onProgress = (m: any[], isComplete: boolean) => {
-              const filteredChunk = filterMovies(m, preferences, preferences);
+              const filteredChunk = filterMovies(m, preferences);
               if (filteredChunk.length > movies.length) {
                 // Append by replacing with larger list; preserves current index
                 const setMovies = useStore.getState().setMovies;
@@ -199,7 +199,7 @@ export default function Home() {
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
           const onProgress = (m: any[], isComplete: boolean) => {
-            const filteredChunk = filterMovies(m, prefsToUse, prefsToUse);
+            const filteredChunk = filterMovies(m, prefsToUse);
             if (filteredChunk.length > movies.length) {
               const setMovies = useStore.getState().setMovies;
               setMovies(filteredChunk);
