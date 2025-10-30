@@ -86,12 +86,12 @@ export default function Home() {
             }
             // Convert preferences to match fetchFilteredMovies signature
             const onProgress = (m: any[], isComplete: boolean) => {
+              // Update deck only when the stream is complete to avoid
+              // mid-session list resets that can advance the index.
+              if (!isComplete) return;
               const filteredChunk = filterMovies(m, preferences);
-              if (filteredChunk.length > movies.length) {
-                // Append by replacing with larger list; preserves current index
-                const setMovies = useStore.getState().setMovies;
-                setMovies(filteredChunk);
-              }
+              const setMovies = useStore.getState().setMovies;
+              setMovies(filteredChunk);
             };
             const fetchedMovies = await fetchFilteredMovies({
               genres: preferences.genres,
@@ -199,11 +199,10 @@ export default function Home() {
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
           const onProgress = (m: any[], isComplete: boolean) => {
+            if (!isComplete) return;
             const filteredChunk = filterMovies(m, prefsToUse);
-            if (filteredChunk.length > movies.length) {
-              const setMovies = useStore.getState().setMovies;
-              setMovies(filteredChunk);
-            }
+            const setMovies = useStore.getState().setMovies;
+            setMovies(filteredChunk);
           };
           const fetchedMovies = await fetchFilteredMovies({
             genres: prefsToUse.genres,
