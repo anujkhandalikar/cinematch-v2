@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
+import { fetchLanguageSeed } from '@/lib/ingestion';
 import { convertTMDBToLanguages } from '@/lib/tmdb';
 import { getCachedMovies } from '@/lib/movieCache';
 import { sessionService } from '@/lib/supabase';
@@ -84,6 +85,24 @@ export default function Home() {
                 console.log('⚡ Using relaxed instant deck for perceived speed');
               }
               loadMovies(instantFiltered);
+            }
+            // If only language is selected (no genres/platforms), fetch a large language seed and load directly
+            if ((preferences.languages?.length ?? 0) > 0 &&
+                (preferences.genres?.length ?? 0) === 0 &&
+                (preferences.ottPlatforms?.length ?? 0) === 0) {
+              const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+              const seeds = await Promise.all(
+                preferences.languages
+                  .map(l => languageCodes[l as any])
+                  .filter(Boolean)
+                  .map(code => fetchLanguageSeed(code as string, 12, !!preferences.adultContent))
+              );
+              const seedMovies = seeds.flat();
+              const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any, seed);
+              console.log('🎯 Direct language seed size:', filteredSeed.length);
+              loadMovies(filteredSeed);
+              setIsLoadingMovies(false);
+              return;
             }
             // Convert preferences to match fetchFilteredMovies signature
             const onProgress = (m: any[], isComplete: boolean) => {
@@ -215,6 +234,24 @@ export default function Home() {
             loadMovies(instantFiltered);
           }
           
+          // Hard language-only path for dual/unified
+          if ((prefsToUse.languages?.length ?? 0) > 0 &&
+              (prefsToUse.genres?.length ?? 0) === 0 &&
+              (prefsToUse.ottPlatforms?.length ?? 0) === 0) {
+            const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+            const seeds = await Promise.all(
+              prefsToUse.languages
+                .map(l => languageCodes[l as any])
+                .filter(Boolean)
+                .map(code => fetchLanguageSeed(code as string, 12, !!prefsToUse.adultContent))
+            );
+            const seedMovies = seeds.flat();
+            const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any, seed);
+            loadMovies(filteredSeed);
+            setIsLoadingMovies(false);
+            return;
+          }
+
           // Fetch movies from TMDB with preferences
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
