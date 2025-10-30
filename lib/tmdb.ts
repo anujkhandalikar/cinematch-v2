@@ -390,7 +390,7 @@ export async function fetchHindiMovies(): Promise<any[]> {
   try {
     console.log('Fetching Hindi movies using discover endpoint...');
     
-    const endpoints = [];
+    const endpoints: string[] = [];
     
     // Discover Hindi movies by different criteria
     const discoverQueries = [
