@@ -21,7 +21,7 @@ export default function LoadingScreen() {
           ottPlatforms: base?.ottPlatforms ?? [],
           languages: base?.languages ?? [],
           adultContent: base?.adultContent ?? false,
-          releaseYear: base?.releaseYear ?? null,
+          releaseYear: typeof base?.releaseYear === 'number' ? base?.releaseYear : undefined,
           highRatedOnly: base?.highRatedOnly ?? false,
         };
 
