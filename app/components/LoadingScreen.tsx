@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useStore } from '@/lib/store';
+import { useStore, UserPreferences } from '@/lib/store';
 import { fetchFilteredMovies } from '@/lib/movies';
 
 export default function LoadingScreen() {
@@ -14,19 +14,15 @@ export default function LoadingScreen() {
   useEffect(() => {
     const loadMovies = async () => {
       try {
-        // Get preferences
-        const rawPreferences = session?.combinedPreferences || session?.creatorPreferences || {
-          genres: [],
-          ottPlatforms: [],
-          adultContent: false
-        };
-
-        // Convert preferences to match fetchFilteredMovies signature
+        // Safely narrow to partial preferences and normalize
+        const base = (session?.combinedPreferences || session?.creatorPreferences) as Partial<UserPreferences> | undefined;
         const preferences = {
-          genres: rawPreferences.genres,
-          ottPlatforms: rawPreferences.ottPlatforms,
-          adultContent: rawPreferences.adultContent,
-          // Don't pass releaseYear as it's not compatible with fetchFilteredMovies
+          genres: base?.genres ?? [],
+          ottPlatforms: base?.ottPlatforms ?? [],
+          languages: base?.languages ?? [],
+          adultContent: base?.adultContent ?? false,
+          releaseYear: base?.releaseYear ?? null,
+          highRatedOnly: base?.highRatedOnly ?? false,
         };
 
         setLoadingText('Loading movies...');
