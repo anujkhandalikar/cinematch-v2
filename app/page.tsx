@@ -96,7 +96,7 @@ export default function Home() {
                 preferences.languages
                   .map(l => languageCodes[l as any])
                   .filter(Boolean)
-                  .map(code => fetchLanguageSeed(code as string, 12, !!preferences.adultContent))
+                  .map(code => fetchLanguageSeed(code as string, 50, !!preferences.adultContent))
               );
               const seedMovies = seeds.flat();
               const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
@@ -244,7 +244,7 @@ export default function Home() {
               prefsToUse.languages
                 .map(l => languageCodes[l as any])
                 .filter(Boolean)
-                .map(code => fetchLanguageSeed(code as string, 12, !!prefsToUse.adultContent))
+                .map(code => fetchLanguageSeed(code as string, 50, !!prefsToUse.adultContent))
             );
             const seedMovies = seeds.flat();
             const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
