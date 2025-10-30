@@ -89,7 +89,7 @@ export default function Home() {
               // Update deck only when the stream is complete to avoid
               // mid-session list resets that can advance the index.
               if (!isComplete) return;
-              const filteredChunk = filterMovies(m, preferences);
+              const filteredChunk = filterMovies(m, preferences, seed);
               const setMovies = useStore.getState().setMovies;
               setMovies(filteredChunk);
             };
@@ -200,7 +200,7 @@ export default function Home() {
           // Convert preferences to match fetchFilteredMovies signature
           const onProgress = (m: any[], isComplete: boolean) => {
             if (!isComplete) return;
-            const filteredChunk = filterMovies(m, prefsToUse);
+            const filteredChunk = filterMovies(m, prefsToUse, seed);
             const setMovies = useStore.getState().setMovies;
             setMovies(filteredChunk);
           };
