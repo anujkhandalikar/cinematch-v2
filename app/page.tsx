@@ -23,6 +23,7 @@ export default function Home() {
   const loadMovies = useStore((state) => state.loadMovies);
   const session = useStore((state) => state.session);
   const movies = useStore((state) => state.movies);
+  const currentMovieIndex = useStore((state) => state.currentMovieIndex);
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const hasLoadedMovies = useRef(false);
@@ -394,7 +395,14 @@ export default function Home() {
           </div>
         );
       }
-      return <SwipeDeck />;
+      return (
+        <div className="relative">
+          <div className="fixed top-2 left-2 z-50 bg-black/70 text-white text-xs px-2 py-1 rounded">
+            Deck: {movies.length} • Index: {currentMovieIndex}
+          </div>
+          <SwipeDeck />
+        </div>
+      );
     case 'shortlist':
       return <ShortlistScreen />;
     default:
