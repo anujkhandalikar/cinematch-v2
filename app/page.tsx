@@ -102,7 +102,11 @@ export default function Home() {
             }, onProgress);
             console.log('📥 Fetched movies:', fetchedMovies.length);
             
-            const filtered = filterMovies(fetchedMovies, preferences, seed);
+            let filtered = filterMovies(fetchedMovies, preferences, seed);
+            if (preferences.languages && preferences.languages.length > 0 && filtered.length < 20) {
+              const relaxed = { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any;
+              filtered = filterMovies(fetchedMovies, relaxed, seed);
+            }
             console.log('🎯 Filtered/shuffled movies:', filtered.length);
             console.log('📋 Loading movies into state');
             if (filtered.length === 0) {
@@ -216,7 +220,11 @@ export default function Home() {
           console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
-          const filtered = filterMovies(fetchedMovies, prefsToUse, seed);
+          let filtered = filterMovies(fetchedMovies, prefsToUse, seed);
+          if (prefsToUse.languages && prefsToUse.languages.length > 0 && filtered.length < 20) {
+            const relaxed = { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any;
+            filtered = filterMovies(fetchedMovies, relaxed, seed);
+          }
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs AFTER shuffle:', filtered.slice(0, 5).map(m => m.id));
