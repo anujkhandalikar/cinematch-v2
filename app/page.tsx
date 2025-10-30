@@ -99,7 +99,7 @@ export default function Home() {
                   .map(code => fetchLanguageSeed(code as string, 12, !!preferences.adultContent))
               );
               const seedMovies = seeds.flat();
-              const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any, seed);
+              const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
               console.log('🎯 Direct language seed size:', filteredSeed.length);
               loadMovies(filteredSeed);
               setIsLoadingMovies(false);
@@ -111,7 +111,7 @@ export default function Home() {
               // mid-session list resets that can advance the index.
               if (!isComplete) return;
               const langRelaxed = (preferences.languages && preferences.languages.length > 0)
-                ? { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+                ? { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any
                 : preferences;
               const filteredChunk = filterMovies(m, langRelaxed, seed);
               const loadMoviesFn = useStore.getState().loadMovies;
@@ -140,7 +140,7 @@ export default function Home() {
               );
             }
             if (preferences.languages && preferences.languages.length > 0 && filtered.length < 20) {
-              const relaxed = { ...preferences, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any;
+              const relaxed = { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any;
               filtered = filterMovies(fetchedMovies, relaxed, seed);
             }
             console.log('🎯 Filtered/shuffled movies:', filtered.length);
@@ -247,7 +247,7 @@ export default function Home() {
                 .map(code => fetchLanguageSeed(code as string, 12, !!prefsToUse.adultContent))
             );
             const seedMovies = seeds.flat();
-            const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any, seed);
+            const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
             loadMovies(filteredSeed);
             setIsLoadingMovies(false);
             return;
@@ -259,7 +259,7 @@ export default function Home() {
           const onProgress = (m: any[], isComplete: boolean) => {
             if (!isComplete) return;
             const langRelaxed = (prefsToUse.languages && prefsToUse.languages.length > 0)
-              ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+              ? { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any
               : prefsToUse;
             const filteredChunk = filterMovies(m, langRelaxed, seed);
             const loadMoviesFn = useStore.getState().loadMovies;
@@ -278,7 +278,7 @@ export default function Home() {
           console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
           const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0)
-            ? { ...prefsToUse, genres: [], ottPlatforms: [], highRatedOnly: false, releaseYear: undefined } as any
+            ? { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any
             : prefsToUse;
           let filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
           if (prefsToUse.languages?.length > 0 &&
