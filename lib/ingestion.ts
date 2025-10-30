@@ -120,7 +120,9 @@ export async function streamLanguageAll(
   }
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
   if (buffer.length) onChunk(buffer, false);
-  onChunk([], true);
+  // Emit full accumulated set on completion so callers can refresh decks
+  const allMovies = [...firstMovies, ...buffer];
+  onChunk(allMovies, true);
 }
 
 // Fetch a fast seed for a language by grabbing the first N pages concurrently
