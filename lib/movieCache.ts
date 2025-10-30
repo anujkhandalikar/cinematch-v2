@@ -368,17 +368,17 @@ export function getCachedMovies(preferences: {
       preferences.genres.every((selected) => movie.genres.includes(selected))
     );
   }
-  // High rated filter
+  // High rated filter - strict: rating must exist and be >= 8.0
   if (preferences.highRatedOnly) {
-    movies = movies.filter(movie => (movie.rating || 0) >= 8);
+    movies = movies.filter(movie => movie.rating && movie.rating >= 8.0);
   }
-  // Release year filter (optional)
+  // Release year filter - strict
   const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
     if (filter === null || filter === undefined) return true;
     if (typeof filter === 'number') return year >= filter;
-    if (filter === '2025') return year >= 2023;
-    if (filter === '2000s') return year >= 2000 && year < 2010;
-    if (filter === 'older') return year < 2000;
+    if (filter === '2025') return year >= 2024; // 2024 or later for "2025" selection
+    if (filter === '2000s') return year >= 2000 && year < 2010; // Strictly 2000-2009
+    if (filter === 'older') return year < 2000; // Strictly before 2000
     return true;
   };
   if (preferences.releaseYear !== undefined && preferences.releaseYear !== null) {

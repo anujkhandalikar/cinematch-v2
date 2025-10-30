@@ -85,7 +85,7 @@ export default function PreferencesScreen() {
             </p>
           </div>
 
-          {/* High Rated Only Toggle (moved above OTT) */}
+          {/* High Rated Only Toggle */}
           <div className="mb-8">
             <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
               <div>
@@ -105,7 +105,25 @@ export default function PreferencesScreen() {
             </div>
           </div>
 
-          {/* Languages Section removed */}
+          {/* OTT Platforms Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {OTT_PLATFORMS.map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => handlePlatformToggle(platform)}
+                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
+                    selectedPlatforms.includes(platform)
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {platform}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Genres Section */}
           <div className="mb-8">
@@ -188,26 +206,6 @@ export default function PreferencesScreen() {
                   adultContent ? 'translate-x-6' : 'translate-x-0.5'
                 }`} />
               </button>
-            </div>
-          </div>
-
-          {/* OTT Platforms Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {OTT_PLATFORMS.map((platform) => (
-                <button
-                  key={platform}
-                  onClick={() => handlePlatformToggle(platform)}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedPlatforms.includes(platform)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {platform}
-                </button>
-              ))}
             </div>
           </div>
         </div>
