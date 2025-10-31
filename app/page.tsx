@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useStore } from '@/lib/store';
+import { useStore, Movie } from '@/lib/store';
 import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
 import { fetchLanguageSeed } from '@/lib/ingestion';
 import { convertTMDBToLanguages } from '@/lib/tmdb';

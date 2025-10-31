@@ -71,7 +71,15 @@ export async function streamDiscoverAll(
   if (buffer.length) {
     onChunk(buffer, false);
   }
-  onChunk([], true);
+  
+  // Emit full accumulated set on completion with deduplication
+  const allMovies = [...firstMovies, ...buffer];
+  const unique = allMovies.filter((movie, index, self) => 
+    index === self.findIndex(m => m.id === movie.id)
+  );
+  // Cache full set in IndexedDB
+  try { await idbSet(cacheKey, { movies: unique, ts: Date.now() }); } catch {}
+  onChunk(unique, true);
 }
 
 // Language streaming using with_original_language, staged then background
