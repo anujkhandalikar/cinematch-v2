@@ -125,26 +125,6 @@ export default function PreferencesScreen() {
             </div>
           </div>
 
-          {/* Genres Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Favorite Genres</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {GENRES.map((genre) => (
-                <button
-                  key={genre}
-                  onClick={() => handleGenreToggle(genre)}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedGenres.includes(genre)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {genre}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Language Section */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-white mb-4">Language</h2>
@@ -160,6 +140,26 @@ export default function PreferencesScreen() {
                   }`}
                 >
                   {language}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Genres Section */}
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Favorite Genres</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {GENRES.map((genre) => (
+                <button
+                  key={genre}
+                  onClick={() => handleGenreToggle(genre)}
+                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
+                    selectedGenres.includes(genre)
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {genre}
                 </button>
               ))}
             </div>
