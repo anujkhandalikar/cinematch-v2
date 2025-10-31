@@ -106,16 +106,42 @@ export default function Home() {
               return;
             }
             // Convert preferences to match fetchFilteredMovies signature
+            let accumulatedMovies: Movie[] = [];
             const onProgress = (m: any[], isComplete: boolean) => {
-              // Update deck only when the stream is complete to avoid
-              // mid-session list resets that can advance the index.
-              if (!isComplete) return;
+              // Accumulate all movies from stream
+              accumulatedMovies = [...accumulatedMovies, ...m];
+              // Deduplicate
+              const unique = accumulatedMovies.filter((movie, index, self) => 
+                index === self.findIndex(m => m.id === movie.id)
+              );
+              
+              // Apply filters
               const langRelaxed = (preferences.languages && preferences.languages.length > 0)
                 ? { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any
                 : preferences;
-              const filteredChunk = filterMovies(m, langRelaxed, seed);
-              const loadMoviesFn = useStore.getState().loadMovies;
-              loadMoviesFn(filteredChunk);
+              const filtered = filterMovies(unique, langRelaxed, seed);
+              
+              // Update deck incrementally: load initial, append after
+              const appendMoviesFn = useStore.getState().appendMovies;
+              const currentMovies = useStore.getState().movies;
+              if (currentMovies.length === 0 && filtered.length > 0) {
+                // Initial load
+                const loadMoviesFn = useStore.getState().loadMovies;
+                loadMoviesFn(filtered);
+              } else if (filtered.length > currentMovies.length) {
+                // Append new movies
+                const newMovies = filtered.filter(m => !currentMovies.some(existing => existing.id === m.id));
+                if (newMovies.length > 0) {
+                  appendMoviesFn(newMovies);
+                }
+              }
+              
+              // On final completion, do a full refresh to ensure all filters are applied correctly
+              if (isComplete) {
+                const finalFiltered = filterMovies(unique, langRelaxed, seed);
+                const loadMoviesFn = useStore.getState().loadMovies;
+                loadMoviesFn(finalFiltered);
+              }
             };
             const fetchedMovies = await fetchFilteredMovies({
               genres: preferences.genres,
@@ -256,14 +282,40 @@ export default function Home() {
           // Fetch movies from TMDB with preferences
           console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
+          let accumulatedMovies: Movie[] = [];
           const onProgress = (m: any[], isComplete: boolean) => {
-            if (!isComplete) return;
+            // Accumulate all movies from stream
+            accumulatedMovies = [...accumulatedMovies, ...m];
+            // Deduplicate
+            const unique = accumulatedMovies.filter((movie, index, self) => 
+              index === self.findIndex(m => m.id === movie.id)
+            );
+            
+            // Apply filters
             const langRelaxed = (prefsToUse.languages && prefsToUse.languages.length > 0)
               ? { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any
               : prefsToUse;
-            const filteredChunk = filterMovies(m, langRelaxed, seed);
-            const loadMoviesFn = useStore.getState().loadMovies;
-            loadMoviesFn(filteredChunk);
+            const filtered = filterMovies(unique, langRelaxed, seed);
+            
+            // Update deck incrementally
+            const appendMoviesFn = useStore.getState().appendMovies;
+            const currentMovies = useStore.getState().movies;
+            if (currentMovies.length === 0 && filtered.length > 0) {
+              const loadMoviesFn = useStore.getState().loadMovies;
+              loadMoviesFn(filtered);
+            } else if (filtered.length > currentMovies.length) {
+              const newMovies = filtered.filter(m => !currentMovies.some(existing => existing.id === m.id));
+              if (newMovies.length > 0) {
+                appendMoviesFn(newMovies);
+              }
+            }
+            
+            // On final completion, do full refresh
+            if (isComplete) {
+              const finalFiltered = filterMovies(unique, langRelaxed, seed);
+              const loadMoviesFn = useStore.getState().loadMovies;
+              loadMoviesFn(finalFiltered);
+            }
           };
           const fetchedMovies = await fetchFilteredMovies({
             genres: prefsToUse.genres,

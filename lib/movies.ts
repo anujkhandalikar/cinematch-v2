@@ -69,23 +69,33 @@ export async function fetchFilteredMovies(preferences: {
           }
         } catch {}
         const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
-        preferences.languages.forEach((lang) => {
+        // Accumulate all language movies and deduplicate
+        let allLanguageMovies: Movie[] = [];
+        const languagePromises = preferences.languages.map((lang) => {
           const code = languageCodes[lang as any];
-          if (!code) return;
-          // eslint-disable-next-line @typescript-eslint/no-floating-promises
-          streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
+          if (!code) return Promise.resolve();
+          return streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
             if (chunk.length) {
-              movies = [...movies, ...chunk];
-              onProgress?.(movies, isComplete);
+              allLanguageMovies = [...allLanguageMovies, ...chunk];
+              // Deduplicate
+              const unique = allLanguageMovies.filter((movie, index, self) => 
+                index === self.findIndex(m => m.id === movie.id)
+              );
+              onProgress?.(unique, isComplete);
             }
           });
         });
+        await Promise.all(languagePromises);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        streamDiscoverAll({ language: 'en-US', adult: !!preferences.adultContent }, (chunk, isComplete) => {
+        let allDiscoverMovies: Movie[] = [];
+        await streamDiscoverAll({ language: 'en-US', adult: !!preferences.adultContent }, (chunk, isComplete) => {
           if (chunk.length) {
-            movies = [...movies, ...chunk];
-            onProgress?.(movies, isComplete);
+            allDiscoverMovies = [...allDiscoverMovies, ...chunk];
+            // Deduplicate
+            const unique = allDiscoverMovies.filter((movie, index, self) => 
+              index === self.findIndex(m => m.id === movie.id)
+            );
+            onProgress?.(unique, isComplete);
           }
         });
       }

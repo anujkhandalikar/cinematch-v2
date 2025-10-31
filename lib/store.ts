@@ -66,6 +66,7 @@ interface AppState {
   likedMovies: Movie[];
   setMovies: (movies: Movie[]) => void;
   loadMovies: (movies: Movie[]) => void; // For initial loading (resets index)
+  appendMovies: (newMovies: Movie[]) => void; // Append movies incrementally (deduplicates)
   addLikedMovie: (movie: Movie) => void;
   nextMovie: () => void;
   
@@ -141,6 +142,14 @@ export const useStore = create<AppState>((set) => ({
   likedMovies: [],
   setMovies: (movies) => set({ movies }),
   loadMovies: (movies) => set({ movies, currentMovieIndex: 0 }),
+  appendMovies: (newMovies) => set((state) => {
+    // Merge and deduplicate by movie ID
+    const existingIds = new Set(state.movies.map(m => m.id));
+    const uniqueNew = newMovies.filter(m => !existingIds.has(m.id));
+    return {
+      movies: [...state.movies, ...uniqueNew]
+    };
+  }),
   addLikedMovie: (movie) => set((state) => ({ 
     likedMovies: [...state.likedMovies, movie] 
   })),
