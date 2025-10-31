@@ -87,22 +87,40 @@ export default function Home() {
               }
               loadMovies(instantFiltered);
             }
-            // If only language is selected (no genres/platforms), fetch a large language seed and load directly
+            // If only language is selected (no genres/platforms), fetch fast seed (3 pages) for instant load
             if ((preferences.languages?.length ?? 0) > 0 &&
                 (preferences.genres?.length ?? 0) === 0 &&
                 (preferences.ottPlatforms?.length ?? 0) === 0) {
               const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+              // Fast seed: just 3 pages for instant load (<400ms)
               const seeds = await Promise.all(
                 preferences.languages
                   .map(l => languageCodes[l as any])
                   .filter(Boolean)
-                  .map(code => fetchLanguageSeed(code as string, 50, !!preferences.adultContent))
+                  .map(code => fetchLanguageSeed(code as string, 3, !!preferences.adultContent))
               );
               const seedMovies = seeds.flat();
               const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
-              console.log('🎯 Direct language seed size:', filteredSeed.length);
+              console.log('🎯 Fast language seed size:', filteredSeed.length);
               loadMovies(filteredSeed);
               setIsLoadingMovies(false);
+              // Start background streaming for more movies (non-blocking)
+              // eslint-disable-next-line @typescript-eslint/no-floating-promises
+              (async () => {
+                const moreSeeds = await Promise.all(
+                  preferences.languages
+                    .map(l => languageCodes[l as any])
+                    .filter(Boolean)
+                    .map(code => fetchLanguageSeed(code as string, 47, !!preferences.adultContent)) // Remaining 47 pages
+                );
+                const moreMovies = moreSeeds.flat();
+                const filteredMore = filterMovies(moreMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
+                const appendMoviesFn = useStore.getState().appendMovies;
+                const newMovies = filteredMore.filter(m => !filteredSeed.some(existing => existing.id === m.id));
+                if (newMovies.length > 0) {
+                  appendMoviesFn(newMovies);
+                }
+              })();
               return;
             }
             // Convert preferences to match fetchFilteredMovies signature
@@ -261,21 +279,39 @@ export default function Home() {
             loadMovies(instantFiltered);
           }
           
-          // Hard language-only path for dual/unified
+          // Hard language-only path for dual/unified - fast seed first
           if ((prefsToUse.languages?.length ?? 0) > 0 &&
               (prefsToUse.genres?.length ?? 0) === 0 &&
               (prefsToUse.ottPlatforms?.length ?? 0) === 0) {
             const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+            // Fast seed: 3 pages for instant load
             const seeds = await Promise.all(
               prefsToUse.languages
                 .map(l => languageCodes[l as any])
                 .filter(Boolean)
-                .map(code => fetchLanguageSeed(code as string, 50, !!prefsToUse.adultContent))
+                .map(code => fetchLanguageSeed(code as string, 3, !!prefsToUse.adultContent))
             );
             const seedMovies = seeds.flat();
             const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
             loadMovies(filteredSeed);
             setIsLoadingMovies(false);
+            // Background: fetch remaining pages (non-blocking)
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            (async () => {
+              const moreSeeds = await Promise.all(
+                prefsToUse.languages
+                  .map(l => languageCodes[l as any])
+                  .filter(Boolean)
+                  .map(code => fetchLanguageSeed(code as string, 47, !!prefsToUse.adultContent))
+              );
+              const moreMovies = moreSeeds.flat();
+              const filteredMore = filterMovies(moreMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
+              const appendMoviesFn = useStore.getState().appendMovies;
+              const newMovies = filteredMore.filter(m => !filteredSeed.some(existing => existing.id === m.id));
+              if (newMovies.length > 0) {
+                appendMoviesFn(newMovies);
+              }
+            })();
             return;
           }
 

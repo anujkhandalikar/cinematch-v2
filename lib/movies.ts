@@ -49,59 +49,63 @@ export async function fetchFilteredMovies(preferences: {
     const languagesToUse: Language[] = [];
 
     let movies: Movie[] = [];
-    // Kick off background ingestion: if user selected languages, seed by language; else global discover
-    console.log('Starting progressive ingestion from TMDB discover (background)...');
+    // Fast initial seed: fetch first 3 pages for instant load (<400ms)
     try {
       if (preferences.languages && preferences.languages.length > 0) {
-        // Fast seed: fetch first pages for each selected language immediately
-        try {
-          const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
-          const seeds = await Promise.all(
-            preferences.languages
-              .map(l => languageCodes[l as any])
-              .filter(Boolean)
-              .map(code => fetchLanguageSeed(code as string, 6, !!preferences.adultContent))
-          );
-          const seedMovies = seeds.flat();
-          if (seedMovies.length > 0) {
-            movies = [...movies, ...seedMovies];
-            onProgress?.(movies, false);
-          }
-        } catch {}
         const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
-        // Accumulate all language movies and deduplicate
-        let allLanguageMovies: Movie[] = [];
-        const languagePromises = preferences.languages.map((lang) => {
-          const code = languageCodes[lang as any];
-          if (!code) return Promise.resolve();
-          return streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
+        const seeds = await Promise.all(
+          preferences.languages
+            .map(l => languageCodes[l as any])
+            .filter(Boolean)
+            .map(code => fetchLanguageSeed(code as string, 3, !!preferences.adultContent)) // Just 3 pages for speed
+        );
+        const seedMovies = seeds.flat();
+        if (seedMovies.length > 0) {
+          movies = [...movies, ...seedMovies];
+          onProgress?.(movies, false); // Show immediately
+        }
+      }
+    } catch (e) {
+      console.warn('Fast seed failed:', e);
+    }
+
+    // Background streaming (non-blocking) - continues fetching more pages
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    (async () => {
+      try {
+        if (preferences.languages && preferences.languages.length > 0) {
+          const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
+          let allLanguageMovies: Movie[] = [...movies];
+          const languagePromises = preferences.languages.map((lang) => {
+            const code = languageCodes[lang as any];
+            if (!code) return Promise.resolve();
+            return streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
+              if (chunk.length) {
+                allLanguageMovies = [...allLanguageMovies, ...chunk];
+                const unique = allLanguageMovies.filter((movie, index, self) => 
+                  index === self.findIndex(m => m.id === movie.id)
+                );
+                onProgress?.(unique, isComplete);
+              }
+            });
+          });
+          await Promise.all(languagePromises);
+        } else {
+          let allDiscoverMovies: Movie[] = [...movies];
+          await streamDiscoverAll({ language: 'en-US', adult: !!preferences.adultContent }, (chunk, isComplete) => {
             if (chunk.length) {
-              allLanguageMovies = [...allLanguageMovies, ...chunk];
-              // Deduplicate
-              const unique = allLanguageMovies.filter((movie, index, self) => 
+              allDiscoverMovies = [...allDiscoverMovies, ...chunk];
+              const unique = allDiscoverMovies.filter((movie, index, self) => 
                 index === self.findIndex(m => m.id === movie.id)
               );
               onProgress?.(unique, isComplete);
             }
           });
-        });
-        await Promise.all(languagePromises);
-      } else {
-        let allDiscoverMovies: Movie[] = [];
-        await streamDiscoverAll({ language: 'en-US', adult: !!preferences.adultContent }, (chunk, isComplete) => {
-          if (chunk.length) {
-            allDiscoverMovies = [...allDiscoverMovies, ...chunk];
-            // Deduplicate
-            const unique = allDiscoverMovies.filter((movie, index, self) => 
-              index === self.findIndex(m => m.id === movie.id)
-            );
-            onProgress?.(unique, isComplete);
-          }
-        });
+        }
+      } catch (e) {
+        console.warn('Background ingestion failed:', e);
       }
-    } catch (e) {
-      console.warn('Failed to start background ingestion:', e);
-    }
+    })();
 
     // Return a fast first batch immediately using trending + popular
     let trending: Movie[] = [];
