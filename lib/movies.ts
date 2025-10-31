@@ -161,8 +161,8 @@ export async function fetchFilteredMovies(preferences: {
     const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
       if (filter === null || filter === undefined) return true;
       if (typeof filter === 'number') return year >= filter;
-      if (filter === '2025') return year >= 2024; // 2024 or later for "2025" selection
-      if (filter === '2000s') return year >= 2000 && year < 2010; // Strictly 2000-2009
+      if (filter === '2025') return year === 2025; // Strictly 2025 only
+      if (filter === '2000s') return year >= 2000 && year <= 2024; // 2000 to 2024 inclusive
       if (filter === 'older') return year < 2000; // Strictly before 2000
       return true;
     };
@@ -247,8 +247,8 @@ export function filterMovies(movies: Movie[], preferences: {
     const matchesRelease = (year: number, filter: number | '2025' | '2000s' | 'older' | null | undefined) => {
       if (filter === null || filter === undefined) return true;
       if (typeof filter === 'number') return year >= filter;
-      if (filter === '2025') return year >= 2024; // 2024 or later for "2025" selection
-      if (filter === '2000s') return year >= 2000 && year < 2010; // Strictly 2000-2009
+      if (filter === '2025') return year === 2025; // Strictly 2025 only
+      if (filter === '2000s') return year >= 2000 && year <= 2024; // 2000 to 2024 inclusive
       if (filter === 'older') return year < 2000; // Strictly before 2000
       return true;
     };
