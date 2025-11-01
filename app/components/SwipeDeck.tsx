@@ -894,13 +894,13 @@ export default function SwipeDeck() {
               touchAction: 'none'
             }}
           />
-          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '700px', maxHeight: '85vh' }}>
+          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '750px', maxHeight: '90vh' }}>
             {/* Poster section - shrinks when description expands */}
             <div 
-              className="relative flex-shrink transition-all duration-300"
+              className="relative flex-shrink-0 transition-all duration-300 ease-in-out"
               style={{ 
-                height: isDescriptionExpanded ? '30%' : '65%',
-                minHeight: isDescriptionExpanded ? '200px' : '450px'
+                height: isDescriptionExpanded ? '25%' : '70%',
+                minHeight: isDescriptionExpanded ? '180px' : '525px'
               }}
             >
               <img
@@ -916,63 +916,66 @@ export default function SwipeDeck() {
             
             {/* Text section - expands when description expands */}
             <div 
-              className="p-2 sm:p-4 flex-1 overflow-y-auto transition-all duration-300"
+              className="p-3 sm:p-4 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out"
               style={{ 
-                height: isDescriptionExpanded ? '70%' : '35%',
-                maxHeight: isDescriptionExpanded ? '490px' : '245px'
+                height: isDescriptionExpanded ? '75%' : '30%',
+                maxHeight: isDescriptionExpanded ? '565px' : '225px'
               }}
             >
-              {/* Genres */}
-              <div className="flex flex-wrap gap-1 sm:gap-2 mb-1 sm:mb-3">
-                {currentMovie.genres.map((genre, index) => (
-                  <span
-                    key={index}
-                    className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-red-600 text-white text-xs rounded-full"
-                  >
-                    {genre}
-                  </span>
-                ))}
+              {/* Scrollable content area */}
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {/* Genres */}
+                <div className="flex flex-wrap gap-1 sm:gap-2 mb-1 sm:mb-3">
+                  {currentMovie.genres.map((genre, index) => (
+                    <span
+                      key={index}
+                      className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-red-600 text-white text-xs rounded-full"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
+                
+                {/* Movie Details */}
+                <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-2 sm:mb-3">
+                  <span className="font-medium">{currentMovie.year}</span>
+                  <span>•</span>
+                  <span className="text-yellow-400 font-medium">⭐ {currentMovie.rating % 1 === 0 ? currentMovie.rating.toFixed(0) : currentMovie.rating.toFixed(1)}/10</span>
+                </div>
+                
+                {/* Title */}
+                <h2 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">{currentMovie.title}</h2>
+                
+                {/* Synopsis - Expandable */}
+                <div className="mb-2 sm:mb-3">
+                  <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
+                    {isDescriptionExpanded 
+                      ? currentMovie.synopsis
+                      : currentMovie.synopsis.length > 80 
+                      ? `${currentMovie.synopsis.substring(0, 80)}...` 
+                      : currentMovie.synopsis}
+                  </p>
+                  {currentMovie.synopsis.length > 80 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsDescriptionExpanded(!isDescriptionExpanded);
+                      }}
+                      className="text-red-400 text-xs mt-1 hover:text-red-300 transition-colors"
+                    >
+                      {isDescriptionExpanded ? 'Show less' : 'Tap to read more'}
+                    </button>
+                  )}
+                </div>
               </div>
               
-              {/* Movie Details */}
-              <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-2 sm:mb-3">
-                <span className="font-medium">{currentMovie.year}</span>
-                <span>•</span>
-                <span className="text-yellow-400 font-medium">⭐ {currentMovie.rating % 1 === 0 ? currentMovie.rating.toFixed(0) : currentMovie.rating.toFixed(1)}/10</span>
-              </div>
-              
-              {/* Title */}
-              <h2 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">{currentMovie.title}</h2>
-              
-              {/* Synopsis - Expandable */}
-              <div className="mb-2 sm:mb-3">
-                <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
-                  {isDescriptionExpanded 
-                    ? currentMovie.synopsis
-                    : currentMovie.synopsis.length > 80 
-                    ? `${currentMovie.synopsis.substring(0, 80)}...` 
-                    : currentMovie.synopsis}
-                </p>
-                {currentMovie.synopsis.length > 80 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsDescriptionExpanded(!isDescriptionExpanded);
-                    }}
-                    className="text-red-400 text-xs mt-1 hover:text-red-300 transition-colors"
-                  >
-                    {isDescriptionExpanded ? 'Show less' : 'Tap to read more'}
-                  </button>
-                )}
-              </div>
-              
-              {/* OTT Platforms */}
+              {/* OTT Platforms - Always visible at bottom, doesn't scroll */}
               {currentMovie.ott && currentMovie.ott.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-2">
+                <div className="flex flex-wrap gap-1 sm:gap-2 mt-2 pt-2 border-t border-gray-800 flex-shrink-0">
                   {currentMovie.ott.map((platform, index) => (
                     <span
                       key={index}
-                      className="px-1.5 py-0.5 bg-blue-600 text-white text-xs rounded"
+                      className="px-2 py-1 bg-blue-600 text-white text-xs sm:text-sm rounded"
                     >
                       {platform}
                     </span>
@@ -982,7 +985,7 @@ export default function SwipeDeck() {
               
               {/* Adult Content Warning */}
               {currentMovie.adult && (
-                <div className="text-red-400 text-xs font-semibold">
+                <div className="text-red-400 text-xs font-semibold mt-2 flex-shrink-0">
                   ⚠️ Adult Content
                 </div>
               )}
