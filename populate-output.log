@@ -1,0 +1,693 @@
+[dotenv@17.2.3] injecting env (3) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+🚀 Starting IMDb Top 250 Movies population...
+
+🔍 Scraping IMDb Top 250 Movies...
+📄 HTML size: 1731351 bytes
+Strategy 1: Found 1 JSON-LD script blocks
+Strategy 1: Extracted 250 movies from JSON-LD
+✅ Parsed 250 movies from IMDb
+
+🔗 Mapping to TMDB (this will take ~5-10 minutes)...
+
+📦 Batch 1/50 (movies 1-5)...
+  ❌ Failed: 5. 12 Angry Men
+  ✅ 4. The Godfather Part II
+  ✅ 1. The Shawshank Redemption
+  ✅ 3. The Dark Knight
+  ✅ 2. The Godfather
+📦 Batch 2/50 (movies 6-10)...
+  ✅ 9. Pulp Fiction
+  ✅ 6. The Lord of the Rings: The Return of the King
+  ✅ 8. The Lord of the Rings: The Fellowship of the Ring
+  ✅ 7. Schindler&apos;s List
+  ✅ 10. Il buono, il brutto, il cattivo
+📦 Batch 3/50 (movies 11-15)...
+  ✅ 14. Inception
+  ✅ 15. Star Wars: Episode V - The Empire Strikes Back
+  ✅ 11. The Lord of the Rings: The Two Towers
+  ✅ 13. Fight Club
+  ✅ 12. Forrest Gump
+📦 Batch 4/50 (movies 16-20)...
+  ✅ 20. Se7en
+  ✅ 19. One Flew Over the Cuckoo&apos;s Nest
+  ✅ 18. Interstellar
+  ✅ 17. GoodFellas
+  ✅ 16. The Matrix
+📦 Batch 5/50 (movies 21-25)...
+  ✅ 24. Saving Private Ryan
+  ✅ 25. The Green Mile
+  ✅ 21. It&apos;s a Wonderful Life
+  ✅ 23. Shichinin no samurai
+  ✅ 22. The Silence of the Lambs
+📦 Batch 6/50 (movies 26-30)...
+  ✅ 29. Star Wars
+  ✅ 30. Back to the Future
+  ✅ 26. Cidade de Deus
+  ✅ 28. Terminator 2: Judgment Day
+  ✅ 27. La vita è bella
+📦 Batch 7/50 (movies 31-35)...
+  ✅ 34. Gisaengchung
+  ✅ 35. Psycho
+  ✅ 31. Sen to Chihiro no kamikakushi
+  ✅ 33. Gladiator
+  ✅ 32. The Pianist
+📦 Batch 8/50 (movies 36-40)...
+  ✅ 39. Whiplash
+  ✅ 40. Seppuku
+  ✅ 36. The Lion King
+  ✅ 37. Hotaru no haka
+  ✅ 38. The Departed
+📦 Batch 9/50 (movies 41-45)...
+  ✅ 44. Spider-Man: Across the Spider-Verse
+  ✅ 45. Casablanca
+  ✅ 41. The Prestige
+  ✅ 43. Léon
+  ✅ 42. American History X
+📦 Batch 10/50 (movies 46-50)...
+  ✅ 49. Alien
+  ✅ 50. Modern Times
+  ✅ 46. Nuovo Cinema Paradiso
+  ✅ 48. The Usual Suspects
+  ✅ 47. Intouchables
+📦 Batch 11/50 (movies 51-55)...
+  ✅ 51. Rear Window
+  ✅ 55. Apocalypse Now
+  ✅ 54. City Lights
+  ✅ 53. C&apos;era una volta il West
+  ✅ 52. Django Unchained
+📦 Batch 12/50 (movies 56-60)...
+  ✅ 59. Raiders of the Lost Ark
+  ✅ 60. Avengers: Infinity War
+  ✅ 58. Dune: Part Two
+  ✅ 56. WALL·E
+  ✅ 57. Memento
+📦 Batch 13/50 (movies 61-65)...
+  ✅ 64. Witness for the Prosecution
+  ✅ 65. Paths of Glory
+  ✅ 61. Das Leben der Anderen
+  ✅ 63. Sunset Blvd.
+  ✅ 62. Spider-Man: Into the Spider-Verse
+📦 Batch 14/50 (movies 66-70)...
+  ✅ 69. Aliens
+  ✅ 70. 12th Fail
+  ✅ 66. The Shining
+  ✅ 68. Inglourious Basterds
+  ✅ 67. The Great Dictator
+📦 Batch 15/50 (movies 71-75)...
+  ✅ 74. Avengers: Endgame
+  ✅ 75. Amadeus
+  ✅ 71. The Dark Knight Rises
+  ✅ 73. Coco
+  ✅ 72. Tengoku to jigoku
+📦 Batch 16/50 (movies 76-80)...
+  ✅ 80. Das Boot
+  ✅ 76. Good Will Hunting
+  ✅ 78. Oldeuboi
+  ✅ 77. Toy Story
+  ✅ 79. Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb
+📦 Batch 17/50 (movies 81-85)...
+  ✅ 84. American Beauty
+  ✅ 85. 3 Idiots
+  ✅ 81. Kimi no Na wa.
+  ✅ 82. Braveheart
+  ✅ 83. Mononoke-hime
+📦 Batch 18/50 (movies 86-90)...
+  ✅ 89. Singin&apos; in the Rain
+  ✅ 90. Idi i smotri
+  ✅ 86. Joker
+  ✅ 88. C&apos;era una volta in America
+  ✅ 87. Capharnaüm
+📦 Batch 19/50 (movies 91-95)...
+  ✅ 95. Ikiru
+  ✅ 94. Jagten
+  ✅ 91. Requiem for a Dream
+  ✅ 93. Toy Story 3
+  ✅ 92. Star Wars: Episode VI - Return of the Jedi
+📦 Batch 20/50 (movies 96-100)...
+  ✅ 99. Lawrence of Arabia
+  ✅ 100. 2001: A Space Odyssey
+  ✅ 96. Eternal Sunshine of the Spotless Mind
+  ✅ 97. Incendies
+  ✅ 98. The Apartment
+📦 Batch 21/50 (movies 101-105)...
+  ✅ 104. Double Indemnity
+  ✅ 105. Up
+  ✅ 103. Heat
+  ✅ 102. Scarface
+  ✅ 101. Reservoir Dogs
+📦 Batch 22/50 (movies 106-110)...
+  ✅ 110. Vertigo
+  ✅ 108. Full Metal Jacket
+  ✅ 107. M - Eine Stadt sucht einen Mörder
+  ✅ 109. Citizen Kane
+  ✅ 106. North by Northwest
+📦 Batch 23/50 (movies 111-115)...
+  ✅ 111. Le fabuleux destin d&apos;Amélie Poulain
+  ✅ 113. Jodaeiye Nader az Simin
+  ✅ 112. Taare Zameen Par
+  ✅ 114. To Kill a Mockingbird
+  ✅ 115. Die Hard
+📦 Batch 24/50 (movies 116-120)...
+  ✅ 119. Metropolis
+  ✅ 116. Indiana Jones and the Last Crusade
+  ✅ 118. A Clockwork Orange
+  ✅ 117. The Sting
+  ✅ 120. Snatch
+📦 Batch 25/50 (movies 121-125)...
+  ✅ 124. Der Untergang
+  ✅ 125. Ladri di biciclette
+  ✅ 121. 1917
+  ✅ 123. L.A. Confidential
+  ✅ 122. Oppenheimer
+📦 Batch 26/50 (movies 126-130)...
+  ✅ 130. Batman Begins
+  ✅ 129. The Truman Show
+  ✅ 126. Dangal
+  ✅ 127. The Wolf of Wall Street
+  ✅ 128. Green Book
+📦 Batch 27/50 (movies 131-135)...
+  ✅ 134. Shutter Island
+  ✅ 135. Judgment at Nuremberg
+  ✅ 131. Hamilton
+  ✅ 133. Per qualche dollaro in più
+  ✅ 132. Taxi Driver
+📦 Batch 28/50 (movies 136-140)...
+  ✅ 139. The Kid
+  ✅ 140. The Father
+  ✅ 137. Jurassic Park
+  ✅ 136. Some Like It Hot
+  ✅ 138. There Will Be Blood
+📦 Batch 29/50 (movies 141-145)...
+  ✅ 144. Ran
+  ✅ 145. Casino
+  ✅ 141. All About Eve
+  ✅ 143. The Sixth Sense
+  ✅ 142. Hababam Sinifi: Sinifta Kaldi
+📦 Batch 30/50 (movies 146-150)...
+  ✅ 149. Top Gun: Maverick
+  ✅ 150. Unforgiven
+  ✅ 148. The Thing
+  ✅ 146. One Battle After Another
+  ✅ 147. No Country for Old Men
+📦 Batch 31/50 (movies 151-155)...
+  ✅ 154. A Beautiful Mind
+  ✅ 155. The Treasure of the Sierra Madre
+  ✅ 151. El laberinto del fauno
+  ✅ 153. Prisoners
+  ✅ 152. Kill Bill: Vol. 1
+📦 Batch 32/50 (movies 156-160)...
+  ✅ 159. The Great Escape
+  ✅ 160. La meglio gioventù
+  ✅ 158. Yôjinbô
+  ✅ 157. Finding Nemo
+  ✅ 156. Hauru no ugoku shiro
+📦 Batch 33/50 (movies 161-165)...
+  ✅ 165. Gone with the Wind
+  ✅ 161. Monty Python and the Holy Grail
+  ✅ 162. The Elephant Man
+  ✅ 163. Klaus
+  ✅ 164. Dial M for Murder
+📦 Batch 34/50 (movies 166-170)...
+  ✅ 169. V for Vendetta
+  ✅ 170. Gekijô-ban Kimetsu no Yaiba Mugen Jô-hen
+  ✅ 166. El secreto de sus ojos
+  ✅ 168. Lock, Stock and Two Smoking Barrels
+  ✅ 167. Chinatown
+📦 Batch 35/50 (movies 171-175)...
+  ✅ 175. Trainspotting
+  ✅ 174. Three Billboards Outside Ebbing, Missouri
+  ✅ 171. Rashômon
+  ✅ 173. Catch Me If You Can
+  ✅ 172. Inside Out
+📦 Batch 36/50 (movies 176-180)...
+  ✅ 179. Fargo
+  ✅ 180. Warrior
+  ✅ 176. The Bridge on the River Kwai
+  ✅ 178. Raging Bull
+  ✅ 177. Harry Potter and the Deathly Hallows: Part 2
+📦 Batch 37/50 (movies 181-185)...
+  ✅ 184. Ben-Hur
+  ✅ 185. Mad Max: Fury Road
+  ✅ 181. The Wild Robot
+  ✅ 182. Dead Poets Society
+  ✅ 183. Million Dollar Baby
+📦 Batch 38/50 (movies 186-190)...
+  ✅ 189. Bacheha-ye aseman
+  ✅ 186. Gran Torino
+  ✅ 188. Tonari no Totoro
+  ✅ 187. Barry Lyndon
+  ✅ 190. Hacksaw Ridge
+📦 Batch 39/50 (movies 191-195)...
+  ✅ 194. Blade Runner
+  ✅ 195. Spider-Man: No Way Home
+  ✅ 191. The Grand Budapest Hotel
+  ✅ 192. 12 Years a Slave
+  ✅ 193. Before Sunrise
+📦 Batch 40/50 (movies 196-200)...
+  ✅ 199. How to Train Your Dragon
+  ✅ 200. Monsters, Inc.
+  ✅ 196. Salinui chueok
+  ✅ 198. Gone Girl
+  ✅ 197. Ratatouille
+📦 Batch 41/50 (movies 201-205)...
+  ✅ 205. The Gold Rush
+  ✅ 201. Jaws
+  ✅ 202. In the Name of the Father
+  ✅ 203. Ford v Ferrari
+  ✅ 204. Relatos salvajes
+📦 Batch 42/50 (movies 206-210)...
+  ✅ 209. The General
+  ✅ 210. Le salaire de la peur
+  ✅ 206. Sherlock Jr.
+  ✅ 207. Mary and Max.
+  ✅ 208. The Deer Hunter
+📦 Batch 43/50 (movies 211-215)...
+  ✅ 214. Rocky
+  ✅ 215. Smultronstället
+  ✅ 211. Logan
+  ✅ 212. Mr. Smith Goes to Washington
+  ✅ 213. On the Waterfront
+📦 Batch 44/50 (movies 216-220)...
+  ✅ 219. Spotlight
+  ✅ 220. The Terminator
+  ✅ 216. Tôkyô monogatari
+  ✅ 218. Pirates of the Caribbean: The Curse of the Black Pearl
+  ✅ 217. The Third Man
+📦 Batch 45/50 (movies 221-225)...
+  ✅ 224. Jai Bhim
+  ✅ 221. Maharaja
+  ✅ 223. The Big Lebowski
+  ✅ 222. La haine
+  ✅ 225. Det sjunde inseglet
+📦 Batch 46/50 (movies 226-230)...
+  ✅ 230. Platoon
+  ✅ 226. Room
+  ✅ 227. The Sound of Music
+  ✅ 229. The Best Years of Our Lives
+  ✅ 228. Hotel Rwanda
+📦 Batch 47/50 (movies 231-235)...
+  ✅ 234. The Exorcist
+  ✅ 235. Hachi: A Dog&apos;s Tale
+  ✅ 231. Before Sunset
+  ✅ 233. The Incredibles
+  ✅ 232. Koe no Katachi
+📦 Batch 48/50 (movies 236-240)...
+  ✅ 239. The Iron Giant
+  ✅ 236. Rush
+  ✅ 238. Stand by Me
+  ✅ 237. The Wizard of Oz
+  ✅ 240. La passion de Jeanne d&apos;Arc
+📦 Batch 49/50 (movies 241-245)...
+  ✅ 244. La battaglia di Algeri
+  ✅ 241. Babam ve Oglum
+  ✅ 243. Network
+  ✅ 242. Ah-ga-ssi
+  ✅ 245. Gekijô-ban Kimetsu no Yaiba Mugen Ressha-hen
+📦 Batch 50/50 (movies 246-250)...
+  ✅ 249. Laapataa Ladies
+  ✅ 250. The Help
+  ✅ 246. The Grapes of Wrath
+  ✅ 248. To Be or Not to Be
+  ✅ 247. Gangs of Wasseypur
+
+📊 Mapped 249/250 movies to TMDB
+
+
+🗑️  Clearing existing Supabase data...
+⚠️  Could not clear: Invalid API key
+   (Continuing anyway - might be empty table)
+
+📤 Uploading 249 records to Supabase...
+   Table: imdb_top250_movies
+   URL: https://xzlgttxargsptzeghppo.supabase.co
+   📦 Batch 1/13 (20 records)...
+   ❌ Batch 1 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ The Godfather Part II: Invalid API key
+        ❌ The Shawshank Redemption: Invalid API key
+        ❌ The Dark Knight: Invalid API key
+        ❌ The Godfather: Invalid API key
+        ❌ Pulp Fiction: Invalid API key
+        ❌ The Lord of the Rings: The Return of the King: Invalid API key
+        ❌ The Lord of the Rings: The Fellowship of the Ring: Invalid API key
+        ❌ Schindler&apos;s List: Invalid API key
+        ❌ Il buono, il brutto, il cattivo: Invalid API key
+        ❌ Inception: Invalid API key
+        ❌ Star Wars: Episode V - The Empire Strikes Back: Invalid API key
+        ❌ The Lord of the Rings: The Two Towers: Invalid API key
+        ❌ Fight Club: Invalid API key
+        ❌ Forrest Gump: Invalid API key
+        ❌ Se7en: Invalid API key
+        ❌ One Flew Over the Cuckoo&apos;s Nest: Invalid API key
+        ❌ Interstellar: Invalid API key
+        ❌ GoodFellas: Invalid API key
+        ❌ The Matrix: Invalid API key
+        ❌ Saving Private Ryan: Invalid API key
+   📦 Batch 2/13 (20 records)...
+   ❌ Batch 2 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ The Green Mile: Invalid API key
+        ❌ It&apos;s a Wonderful Life: Invalid API key
+        ❌ Shichinin no samurai: Invalid API key
+        ❌ The Silence of the Lambs: Invalid API key
+        ❌ Star Wars: Invalid API key
+        ❌ Back to the Future: Invalid API key
+        ❌ Cidade de Deus: Invalid API key
+        ❌ Terminator 2: Judgment Day: Invalid API key
+        ❌ La vita è bella: Invalid API key
+        ❌ Gisaengchung: Invalid API key
+        ❌ Psycho: Invalid API key
+        ❌ Sen to Chihiro no kamikakushi: Invalid API key
+        ❌ Gladiator: Invalid API key
+        ❌ The Pianist: Invalid API key
+        ❌ Whiplash: Invalid API key
+        ❌ Seppuku: Invalid API key
+        ❌ The Lion King: Invalid API key
+        ❌ Hotaru no haka: Invalid API key
+        ❌ The Departed: Invalid API key
+        ❌ Spider-Man: Across the Spider-Verse: Invalid API key
+   📦 Batch 3/13 (20 records)...
+   ❌ Batch 3 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Casablanca: Invalid API key
+        ❌ The Prestige: Invalid API key
+        ❌ Léon: Invalid API key
+        ❌ American History X: Invalid API key
+        ❌ Alien: Invalid API key
+        ❌ Modern Times: Invalid API key
+        ❌ Nuovo Cinema Paradiso: Invalid API key
+        ❌ The Usual Suspects: Invalid API key
+        ❌ Intouchables: Invalid API key
+        ❌ Rear Window: Invalid API key
+        ❌ Apocalypse Now: Invalid API key
+        ❌ City Lights: Invalid API key
+        ❌ C&apos;era una volta il West: Invalid API key
+        ❌ Django Unchained: Invalid API key
+        ❌ Raiders of the Lost Ark: Invalid API key
+        ❌ Avengers: Infinity War: Invalid API key
+        ❌ Dune: Part Two: Invalid API key
+        ❌ WALL·E: Invalid API key
+        ❌ Memento: Invalid API key
+        ❌ Witness for the Prosecution: Invalid API key
+   📦 Batch 4/13 (20 records)...
+   ❌ Batch 4 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Paths of Glory: Invalid API key
+        ❌ Das Leben der Anderen: Invalid API key
+        ❌ Sunset Blvd.: Invalid API key
+        ❌ Spider-Man: Into the Spider-Verse: Invalid API key
+        ❌ Aliens: Invalid API key
+        ❌ 12th Fail: Invalid API key
+        ❌ The Shining: Invalid API key
+        ❌ Inglourious Basterds: Invalid API key
+        ❌ The Great Dictator: Invalid API key
+        ❌ Avengers: Endgame: Invalid API key
+        ❌ Amadeus: Invalid API key
+        ❌ The Dark Knight Rises: Invalid API key
+        ❌ Coco: Invalid API key
+        ❌ Tengoku to jigoku: Invalid API key
+        ❌ Das Boot: Invalid API key
+        ❌ Good Will Hunting: Invalid API key
+        ❌ Oldeuboi: Invalid API key
+        ❌ Toy Story: Invalid API key
+        ❌ Dr. Strangelove or: How I Learned to Stop Worrying and Love the Bomb: Invalid API key
+        ❌ American Beauty: Invalid API key
+   📦 Batch 5/13 (20 records)...
+   ❌ Batch 5 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ 3 Idiots: Invalid API key
+        ❌ Kimi no Na wa.: Invalid API key
+        ❌ Braveheart: Invalid API key
+        ❌ Mononoke-hime: Invalid API key
+        ❌ Singin&apos; in the Rain: Invalid API key
+        ❌ Idi i smotri: Invalid API key
+        ❌ Joker: Invalid API key
+        ❌ C&apos;era una volta in America: Invalid API key
+        ❌ Capharnaüm: Invalid API key
+        ❌ Ikiru: Invalid API key
+        ❌ Jagten: Invalid API key
+        ❌ Requiem for a Dream: Invalid API key
+        ❌ Toy Story 3: Invalid API key
+        ❌ Star Wars: Episode VI - Return of the Jedi: Invalid API key
+        ❌ Lawrence of Arabia: Invalid API key
+        ❌ 2001: A Space Odyssey: Invalid API key
+        ❌ Eternal Sunshine of the Spotless Mind: Invalid API key
+        ❌ Incendies: Invalid API key
+        ❌ The Apartment: Invalid API key
+        ❌ Double Indemnity: Invalid API key
+   📦 Batch 6/13 (20 records)...
+   ❌ Batch 6 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Up: Invalid API key
+        ❌ Heat: Invalid API key
+        ❌ Scarface: Invalid API key
+        ❌ Reservoir Dogs: Invalid API key
+        ❌ Vertigo: Invalid API key
+        ❌ Full Metal Jacket: Invalid API key
+        ❌ M - Eine Stadt sucht einen Mörder: Invalid API key
+        ❌ Citizen Kane: Invalid API key
+        ❌ North by Northwest: Invalid API key
+        ❌ Le fabuleux destin d&apos;Amélie Poulain: Invalid API key
+        ❌ Jodaeiye Nader az Simin: Invalid API key
+        ❌ Taare Zameen Par: Invalid API key
+        ❌ To Kill a Mockingbird: Invalid API key
+        ❌ Die Hard: Invalid API key
+        ❌ Metropolis: Invalid API key
+        ❌ Indiana Jones and the Last Crusade: Invalid API key
+        ❌ A Clockwork Orange: Invalid API key
+        ❌ The Sting: Invalid API key
+        ❌ Snatch: Invalid API key
+        ❌ Der Untergang: Invalid API key
+   📦 Batch 7/13 (20 records)...
+   ❌ Batch 7 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Ladri di biciclette: Invalid API key
+        ❌ 1917: Invalid API key
+        ❌ L.A. Confidential: Invalid API key
+        ❌ Oppenheimer: Invalid API key
+        ❌ Batman Begins: Invalid API key
+        ❌ The Truman Show: Invalid API key
+        ❌ Dangal: Invalid API key
+        ❌ The Wolf of Wall Street: Invalid API key
+        ❌ Green Book: Invalid API key
+        ❌ Shutter Island: Invalid API key
+        ❌ Judgment at Nuremberg: Invalid API key
+        ❌ Hamilton: Invalid API key
+        ❌ Per qualche dollaro in più: Invalid API key
+        ❌ Taxi Driver: Invalid API key
+        ❌ The Kid: Invalid API key
+        ❌ The Father: Invalid API key
+        ❌ Jurassic Park: Invalid API key
+        ❌ Some Like It Hot: Invalid API key
+        ❌ There Will Be Blood: Invalid API key
+        ❌ Ran: Invalid API key
+   📦 Batch 8/13 (20 records)...
+   ❌ Batch 8 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Casino: Invalid API key
+        ❌ All About Eve: Invalid API key
+        ❌ The Sixth Sense: Invalid API key
+        ❌ Hababam Sinifi: Sinifta Kaldi: Invalid API key
+        ❌ Top Gun: Maverick: Invalid API key
+        ❌ Unforgiven: Invalid API key
+        ❌ The Thing: Invalid API key
+        ❌ One Battle After Another: Invalid API key
+        ❌ No Country for Old Men: Invalid API key
+        ❌ A Beautiful Mind: Invalid API key
+        ❌ The Treasure of the Sierra Madre: Invalid API key
+        ❌ El laberinto del fauno: Invalid API key
+        ❌ Prisoners: Invalid API key
+        ❌ Kill Bill: Vol. 1: Invalid API key
+        ❌ The Great Escape: Invalid API key
+        ❌ La meglio gioventù: Invalid API key
+        ❌ Yôjinbô: Invalid API key
+        ❌ Finding Nemo: Invalid API key
+        ❌ Hauru no ugoku shiro: Invalid API key
+        ❌ Gone with the Wind: Invalid API key
+   📦 Batch 9/13 (20 records)...
+   ❌ Batch 9 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Monty Python and the Holy Grail: Invalid API key
+        ❌ The Elephant Man: Invalid API key
+        ❌ Klaus: Invalid API key
+        ❌ Dial M for Murder: Invalid API key
+        ❌ V for Vendetta: Invalid API key
+        ❌ Gekijô-ban Kimetsu no Yaiba Mugen Jô-hen: Invalid API key
+        ❌ El secreto de sus ojos: Invalid API key
+        ❌ Lock, Stock and Two Smoking Barrels: Invalid API key
+        ❌ Chinatown: Invalid API key
+        ❌ Trainspotting: Invalid API key
+        ❌ Three Billboards Outside Ebbing, Missouri: Invalid API key
+        ❌ Rashômon: Invalid API key
+        ❌ Catch Me If You Can: Invalid API key
+        ❌ Inside Out: Invalid API key
+        ❌ Fargo: Invalid API key
+        ❌ Warrior: Invalid API key
+        ❌ The Bridge on the River Kwai: Invalid API key
+        ❌ Raging Bull: Invalid API key
+        ❌ Harry Potter and the Deathly Hallows: Part 2: Invalid API key
+        ❌ Ben-Hur: Invalid API key
+   📦 Batch 10/13 (20 records)...
+   ❌ Batch 10 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Mad Max: Fury Road: Invalid API key
+        ❌ The Wild Robot: Invalid API key
+        ❌ Dead Poets Society: Invalid API key
+        ❌ Million Dollar Baby: Invalid API key
+        ❌ Bacheha-ye aseman: Invalid API key
+        ❌ Gran Torino: Invalid API key
+        ❌ Tonari no Totoro: Invalid API key
+        ❌ Barry Lyndon: Invalid API key
+        ❌ Hacksaw Ridge: Invalid API key
+        ❌ Blade Runner: Invalid API key
+        ❌ Spider-Man: No Way Home: Invalid API key
+        ❌ The Grand Budapest Hotel: Invalid API key
+        ❌ 12 Years a Slave: Invalid API key
+        ❌ Before Sunrise: Invalid API key
+        ❌ How to Train Your Dragon: Invalid API key
+        ❌ Monsters, Inc.: Invalid API key
+        ❌ Salinui chueok: Invalid API key
+        ❌ Gone Girl: Invalid API key
+        ❌ Ratatouille: Invalid API key
+        ❌ The Gold Rush: Invalid API key
+   📦 Batch 11/13 (20 records)...
+   ❌ Batch 11 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Jaws: Invalid API key
+        ❌ In the Name of the Father: Invalid API key
+        ❌ Ford v Ferrari: Invalid API key
+        ❌ Relatos salvajes: Invalid API key
+        ❌ The General: Invalid API key
+        ❌ Le salaire de la peur: Invalid API key
+        ❌ Sherlock Jr.: Invalid API key
+        ❌ Mary and Max.: Invalid API key
+        ❌ The Deer Hunter: Invalid API key
+        ❌ Rocky: Invalid API key
+        ❌ Smultronstället: Invalid API key
+        ❌ Logan: Invalid API key
+        ❌ Mr. Smith Goes to Washington: Invalid API key
+        ❌ On the Waterfront: Invalid API key
+        ❌ Spotlight: Invalid API key
+        ❌ The Terminator: Invalid API key
+        ❌ Tôkyô monogatari: Invalid API key
+        ❌ Pirates of the Caribbean: The Curse of the Black Pearl: Invalid API key
+        ❌ The Third Man: Invalid API key
+        ❌ Jai Bhim: Invalid API key
+   📦 Batch 12/13 (20 records)...
+   ❌ Batch 12 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Maharaja: Invalid API key
+        ❌ The Big Lebowski: Invalid API key
+        ❌ La haine: Invalid API key
+        ❌ Det sjunde inseglet: Invalid API key
+        ❌ Platoon: Invalid API key
+        ❌ Room: Invalid API key
+        ❌ The Sound of Music: Invalid API key
+        ❌ The Best Years of Our Lives: Invalid API key
+        ❌ Hotel Rwanda: Invalid API key
+        ❌ The Exorcist: Invalid API key
+        ❌ Hachi: A Dog&apos;s Tale: Invalid API key
+        ❌ Before Sunset: Invalid API key
+        ❌ The Incredibles: Invalid API key
+        ❌ Koe no Katachi: Invalid API key
+        ❌ The Iron Giant: Invalid API key
+        ❌ Rush: Invalid API key
+        ❌ Stand by Me: Invalid API key
+        ❌ The Wizard of Oz: Invalid API key
+        ❌ La passion de Jeanne d&apos;Arc: Invalid API key
+        ❌ La battaglia di Algeri: Invalid API key
+   📦 Batch 13/13 (9 records)...
+   ❌ Batch 13 FAILED: Invalid API key
+      Code: undefined
+      Details: {
+  "message": "Invalid API key",
+  "hint": "Double check your Supabase `anon` or `service_role` API key."
+}
+      Trying individual inserts...
+        ❌ Babam ve Oglum: Invalid API key
+        ❌ Network: Invalid API key
+        ❌ Ah-ga-ssi: Invalid API key
+        ❌ Gekijô-ban Kimetsu no Yaiba Mugen Ressha-hen: Invalid API key
+        ❌ Laapataa Ladies: Invalid API key
+        ❌ The Help: Invalid API key
+        ❌ The Grapes of Wrath: Invalid API key
+        ❌ To Be or Not to Be: Invalid API key
+        ❌ Gangs of Wasseypur: Invalid API key
+
+✅ Upload complete!
+   • Total records attempted: 249
+   • Successfully uploaded: 0
+   • Failed batches: 13
+
+❌ ERROR: No records were uploaded to Supabase!
+   Possible issues:
+   1. Supabase credentials incorrect
+   2. Table doesn't exist or has wrong schema
+   3. Row Level Security (RLS) enabled - disable it for this table
+   4. Network/permissions error
+
+   Check:
+   • Table exists: https://supabase.com/dashboard/project/xzlgttxargsptzeghppo/editor
+   • RLS disabled: https://supabase.com/dashboard/project/xzlgttxargsptzeghppo/auth/policies
+   • API keys: https://supabase.com/dashboard/project/xzlgttxargsptzeghppo/settings/api
