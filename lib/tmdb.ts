@@ -218,11 +218,14 @@ async function fetchWatchProviders(movieId: number): Promise<string[]> {
 
 // Assign realistic OTT platforms based on movie characteristics
 // Improved heuristic with better Hindi/Netflix coverage
-function assignOTTPlatforms(movie: TMDBMovie): string[] {
+// Handles both list view (genre_ids) and detail view (genres array) responses
+function assignOTTPlatforms(movie: any): string[] {
   const platforms: string[] = [];
   const popularity = movie.popularity || 0;
   const year = new Date(movie.release_date).getFullYear();
-  const genres = movie.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean);
+  // Handle both genre formats
+  const genreIds = movie.genre_ids || (movie.genres ? movie.genres.map((g: any) => g.id) : []);
+  const genres = genreIds.map((id: number) => GENRE_MAP[id]).filter(Boolean);
   const isHindi = movie.original_language === 'hi';
   
   // Netflix - Popular movies, recent releases, and Hindi content (Netflix has strong Hindi library)
@@ -313,31 +316,56 @@ async function fetchMovieDetails(movieId: number): Promise<number> {
 }
 
 // Convert TMDB movie to our Movie interface (optimized - no runtime fetching)
-export function convertTMDBMovie(tmdbMovie: TMDBMovie): any {
+// Handles both list view (genre_ids) and detail view (genres array) responses
+export function convertTMDBMovie(tmdbMovie: any): any {
+  // Handle both genre formats: genre_ids (array of numbers) or genres (array of objects)
+  let genreIds: number[] = [];
+  if (tmdbMovie.genre_ids && Array.isArray(tmdbMovie.genre_ids)) {
+    genreIds = tmdbMovie.genre_ids;
+  } else if (tmdbMovie.genres && Array.isArray(tmdbMovie.genres)) {
+    genreIds = tmdbMovie.genres.map((g: any) => g.id).filter(Boolean);
+  }
+  
   // Estimate runtime based on genre and year for faster loading
-  const estimatedRuntime = estimateRuntime(tmdbMovie);
+  const estimatedRuntime = estimateRuntime({
+    ...tmdbMovie,
+    genre_ids: genreIds,
+    release_date: tmdbMovie.release_date || '2000-01-01'
+  });
+  
+  // Extract genre names
+  const genreNames = genreIds.map(id => GENRE_MAP[id] || 'Drama').filter(genre => genre !== 'Unknown');
+  // If we have genres objects, use those names directly (more accurate)
+  const finalGenres = tmdbMovie.genres && Array.isArray(tmdbMovie.genres) && tmdbMovie.genres.length > 0
+    ? tmdbMovie.genres.map((g: any) => g.name).filter(Boolean)
+    : genreNames;
   
   return {
     id: tmdbMovie.id.toString(),
     title: tmdbMovie.title,
-    year: new Date(tmdbMovie.release_date).getFullYear(),
-    runtime: estimatedRuntime,
-    rating: parseFloat(tmdbMovie.vote_average.toFixed(1)),
-    genres: tmdbMovie.genre_ids.map(id => GENRE_MAP[id] || 'Drama').filter(genre => genre !== 'Unknown'),
-    ott: assignOTTPlatforms(tmdbMovie),
+    year: tmdbMovie.release_date ? new Date(tmdbMovie.release_date).getFullYear() : 2000,
+    runtime: tmdbMovie.runtime || estimatedRuntime,
+    rating: tmdbMovie.vote_average ? parseFloat(tmdbMovie.vote_average.toFixed(1)) : 0,
+    genres: finalGenres.length > 0 ? finalGenres : ['Drama'],
+    ott: assignOTTPlatforms({
+      ...tmdbMovie,
+      genre_ids: genreIds
+    }),
     poster_url: tmdbMovie.poster_path 
       ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
       : 'https://via.placeholder.com/500x750?text=No+Image',
     synopsis: tmdbMovie.overview || 'No description available',
-    adult: tmdbMovie.adult,
-    original_language: tmdbMovie.original_language
+    adult: tmdbMovie.adult || false,
+    original_language: tmdbMovie.original_language || 'en'
   };
 }
 
 // Estimate runtime based on genre and year (much faster than API calls)
-function estimateRuntime(tmdbMovie: TMDBMovie): number {
+function estimateRuntime(tmdbMovie: { genre_ids?: number[]; release_date?: string }): number {
+  if (!tmdbMovie.release_date) return 105; // Default runtime
   const year = new Date(tmdbMovie.release_date).getFullYear();
-  const genres = tmdbMovie.genre_ids.map(id => GENRE_MAP[id]).filter(Boolean);
+  const genreIds = tmdbMovie.genre_ids || [];
+  const genres = genreIds.map(id => GENRE_MAP[id]).filter(Boolean);
   
   // Base runtime by genre
   const genreRuntimes: Record<string, number> = {

@@ -23,6 +23,7 @@ export default function LoadingScreen() {
           adultContent: base?.adultContent ?? false,
           releaseYear: typeof base?.releaseYear === 'number' ? base?.releaseYear : undefined,
           highRatedOnly: base?.highRatedOnly ?? false,
+          imdbTop250Movies: base?.imdbTop250Movies ?? false,
         };
 
         setLoadingText('Loading movies...');

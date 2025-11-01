@@ -26,6 +26,7 @@ export interface UserPreferences {
   adultContent: boolean;
   releaseYear: '2025' | '2000s' | 'older' | null;
   highRatedOnly?: boolean; // Only show movies with rating >= 8
+  imdbTop250Movies?: boolean; // Only show IMDb Top 250 movies
 }
 
 interface Session {
@@ -126,6 +127,7 @@ const initialPreferences: UserPreferences = {
   adultContent: false,
   releaseYear: null,
   highRatedOnly: false,
+  imdbTop250Movies: false,
 };
 
 export const useStore = create<AppState>((set) => ({
@@ -185,7 +187,8 @@ export const useStore = create<AppState>((set) => ({
     languages: [...new Set([...creatorPrefs.languages, ...joinerPrefs.languages])],
     adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
     releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null,
-    highRatedOnly: !!(creatorPrefs.highRatedOnly || joinerPrefs.highRatedOnly)
+    highRatedOnly: !!(creatorPrefs.highRatedOnly || joinerPrefs.highRatedOnly),
+    imdbTop250Movies: !!(creatorPrefs.imdbTop250Movies || joinerPrefs.imdbTop250Movies)
   }),
   
   timerStart: null,

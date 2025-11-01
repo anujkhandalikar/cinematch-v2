@@ -32,9 +32,53 @@ export async function fetchFilteredMovies(preferences: {
   adultContent: boolean;
   releaseYear?: number;
   highRatedOnly?: boolean;
+  imdbTop250Movies?: boolean;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
     console.log('Fetching movies from TMDB with preferences:', preferences);
+    
+    // Check if IMDb Top 250 filter is selected
+    if (preferences.imdbTop250Movies) {
+      console.log('🎬 IMDb Top 250 filter detected!');
+      
+      try {
+        const { fetchIMDBTop250Movies } = await import('./imdb');
+        let imdbMovies: Movie[] = [];
+        
+        if (preferences.imdbTop250Movies) {
+          console.log('🎬 Fetching IMDb Top 250 Movies...');
+          const top250Movies = await fetchIMDBTop250Movies();
+          console.log(`✅ Got ${top250Movies.length} IMDb Top 250 movies (expecting ~250)`);
+          
+          if (top250Movies.length < 200) {
+            console.warn(`⚠️ Only ${top250Movies.length} movies fetched. Supabase might be empty - run update script.`);
+          }
+          
+          imdbMovies = [...imdbMovies, ...top250Movies];
+        }
+        
+        console.log(`📊 Total IMDb movies before filtering: ${imdbMovies.length}`);
+        
+        // When IMDb Top 250 Movies is enabled, don't apply other filters
+        // (IMDb Top 250 is already curated, so additional filters don't make sense)
+        const filtered = imdbMovies; // No additional filtering for IMDb Top 250
+        console.log(`📊 Total IMDb Top 250 movies: ${filtered.length}`);
+        
+        // Show progress immediately
+        if (filtered.length > 0) {
+          onProgress?.(filtered, false);
+        }
+        
+        // Return filtered IMDb results
+        onProgress?.(filtered, true);
+        return filtered;
+      } catch (error) {
+        console.error('❌ Error fetching IMDb Top 250:', error);
+        // Fall through to regular TMDB fetching as fallback
+        console.log('⚠️ Falling back to regular TMDB fetching...');
+      }
+    }
+    
     // Instant dataset to avoid spinner
     const instant = getCachedMovies({
       genres: preferences.genres,

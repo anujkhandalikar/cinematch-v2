@@ -26,12 +26,16 @@ export default function Home() {
   const currentMovieIndex = useStore((state) => state.currentMovieIndex);
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingElapsed, setLoadingElapsed] = useState(0); // Force re-render to check elapsed time
   const hasLoadedMovies = useRef(false);
+  const loadingStartTime = useRef<number | null>(null);
 
-  // Debug logging
-  console.log('Current screen:', currentScreen);
-  console.log('Movies state:', movies?.length || 0);
-  console.log('Session:', session);
+  // Debug logging (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Current screen:', currentScreen);
+    console.log('Movies state:', movies?.length || 0);
+    console.log('Session:', session);
+  }
 
   // Reset flag when screen changes away from swipe
   useEffect(() => {
@@ -39,6 +43,8 @@ export default function Home() {
       hasLoadedMovies.current = false;
       setIsLoadingMovies(false);
       setLoadError(null);
+      loadingStartTime.current = null;
+      setLoadingElapsed(0);
     }
   }, [currentScreen]);
 
@@ -51,6 +57,7 @@ export default function Home() {
     
     if (shouldLoad) {
       hasLoadedMovies.current = true; // Prevent re-runs
+      loadingStartTime.current = Date.now(); // Track when loading started
         console.log('=== LOADING MOVIES FOR SWIPE SCREEN ===');
           console.log('Session mode:', session?.mode || 'single (no session)');
           console.log('Combined preferences:', session?.combinedPreferences);
@@ -87,78 +94,96 @@ export default function Home() {
               }
               loadMovies(instantFiltered);
             }
-            // If only language is selected (no genres/platforms), fetch fast seed (3 pages) for instant load
+            // If only language is selected (no genres/platforms), use streaming to fetch ALL pages
             if ((preferences.languages?.length ?? 0) > 0 &&
                 (preferences.genres?.length ?? 0) === 0 &&
                 (preferences.ottPlatforms?.length ?? 0) === 0) {
+              const { streamLanguageAll } = await import('@/lib/ingestion');
               const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
-              // Fast seed: just 3 pages for instant load (<400ms)
-              const seeds = await Promise.all(
-                preferences.languages
-                  .map(l => languageCodes[l as any])
-                  .filter(Boolean)
-                  .map(code => fetchLanguageSeed(code as string, 3, !!preferences.adultContent))
-              );
-              const seedMovies = seeds.flat();
-              const filteredSeed = filterMovies(seedMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
-              console.log('🎯 Fast language seed size:', filteredSeed.length);
-              loadMovies(filteredSeed);
               setIsLoadingMovies(false);
-              // Start background streaming for more movies (non-blocking)
+              // Stream all pages for each language (fetches up to 500 pages each, all in background)
               // eslint-disable-next-line @typescript-eslint/no-floating-promises
               (async () => {
-                const moreSeeds = await Promise.all(
-                  preferences.languages
-                    .map(l => languageCodes[l as any])
-                    .filter(Boolean)
-                    .map(code => fetchLanguageSeed(code as string, 47, !!preferences.adultContent)) // Remaining 47 pages
-                );
-                const moreMovies = moreSeeds.flat();
-                const filteredMore = filterMovies(moreMovies, { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
-                const appendMoviesFn = useStore.getState().appendMovies;
-                const newMovies = filteredMore.filter(m => !filteredSeed.some(existing => existing.id === m.id));
-                if (newMovies.length > 0) {
-                  appendMoviesFn(newMovies);
-                }
+                let allLanguageMovies: Movie[] = [];
+                const seenIds = new Set<string>(); // Deduplication Set
+                const languagePromises = preferences.languages.map((lang) => {
+                  const code = languageCodes[lang as any];
+                  if (!code) return Promise.resolve();
+                  return streamLanguageAll(code, { adult: !!preferences.adultContent }, (chunk, isComplete) => {
+                    if (chunk.length) {
+                      // Deduplicate using Set for O(1) lookup
+                      const newMovies = chunk.filter(m => {
+                        if (seenIds.has(m.id)) return false;
+                        seenIds.add(m.id);
+                        return true;
+                      });
+                      allLanguageMovies = [...allLanguageMovies, ...newMovies];
+                      const filtered = filterMovies(allLanguageMovies, preferences, seed);
+                      const appendMoviesFn = useStore.getState().appendMovies;
+                      const currentMovies = useStore.getState().movies;
+                      if (currentMovies.length === 0 && filtered.length > 0) {
+                        useStore.getState().loadMovies(filtered);
+                      } else if (filtered.length > currentMovies.length) {
+                        const currentIds = new Set(currentMovies.map(m => m.id));
+                        const newMovies = filtered.filter(m => !currentIds.has(m.id));
+                        if (newMovies.length > 0) appendMoviesFn(newMovies);
+                      }
+                      // Final completion: refresh deck
+                      if (isComplete) {
+                        const finalFiltered = filterMovies(allLanguageMovies, preferences, seed);
+                        useStore.getState().loadMovies(finalFiltered);
+                      }
+                    }
+                  });
+                });
+                await Promise.all(languagePromises);
               })();
               return;
             }
             // Convert preferences to match fetchFilteredMovies signature
             let accumulatedMovies: Movie[] = [];
+            const seenIds = new Set<string>(); // Use Set for O(1) lookup instead of O(n) array search
             const onProgress = (m: any[], isComplete: boolean) => {
-              // Accumulate all movies from stream
-              accumulatedMovies = [...accumulatedMovies, ...m];
-              // Deduplicate
-              const unique = accumulatedMovies.filter((movie, index, self) => 
-                index === self.findIndex(m => m.id === movie.id)
-              );
+              // Only process if we have new movies
+              if (m.length === 0 && !isComplete) return;
               
-              // Apply filters
-              const langRelaxed = (preferences.languages && preferences.languages.length > 0)
-                ? { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any
+              // Accumulate and deduplicate in one pass using Set
+              const newMovies = m.filter(movie => {
+                if (seenIds.has(movie.id)) return false;
+                seenIds.add(movie.id);
+                return true;
+              });
+              if (newMovies.length > 0) {
+                accumulatedMovies = [...accumulatedMovies, ...newMovies];
+              }
+              
+              // Apply filters - only relax genres/OTT if user didn't select them
+              const langRelaxed = (preferences.languages && preferences.languages.length > 0 &&
+                                   (preferences.genres?.length ?? 0) === 0 &&
+                                   (preferences.ottPlatforms?.length ?? 0) === 0)
+                ? { ...preferences, genres: [], ottPlatforms: [] } as any
                 : preferences;
-              const filtered = filterMovies(unique, langRelaxed, seed);
+              const filtered = filterMovies(accumulatedMovies, langRelaxed, seed);
               
               // Update deck incrementally: load initial, append after
-              const appendMoviesFn = useStore.getState().appendMovies;
               const currentMovies = useStore.getState().movies;
+              const currentIds = new Set(currentMovies.map(m => m.id));
+              
               if (currentMovies.length === 0 && filtered.length > 0) {
                 // Initial load
-                const loadMoviesFn = useStore.getState().loadMovies;
-                loadMoviesFn(filtered);
+                useStore.getState().loadMovies(filtered);
               } else if (filtered.length > currentMovies.length) {
-                // Append new movies
-                const newMovies = filtered.filter(m => !currentMovies.some(existing => existing.id === m.id));
+                // Append only truly new movies using Set for O(1) lookup
+                const newMovies = filtered.filter(m => !currentIds.has(m.id));
                 if (newMovies.length > 0) {
-                  appendMoviesFn(newMovies);
+                  useStore.getState().appendMovies(newMovies);
                 }
               }
               
               // On final completion, do a full refresh to ensure all filters are applied correctly
               if (isComplete) {
-                const finalFiltered = filterMovies(unique, langRelaxed, seed);
-                const loadMoviesFn = useStore.getState().loadMovies;
-                loadMoviesFn(finalFiltered);
+                const finalFiltered = filterMovies(accumulatedMovies, langRelaxed, seed);
+                useStore.getState().loadMovies(finalFiltered);
               }
             };
             const fetchedMovies = await fetchFilteredMovies({
@@ -167,24 +192,31 @@ export default function Home() {
               adultContent: preferences.adultContent,
               languages: preferences.languages,
               highRatedOnly: preferences.highRatedOnly,
+              releaseYear: preferences.releaseYear,
+              imdbTop250Movies: preferences.imdbTop250Movies,
             }, onProgress);
             console.log('📥 Fetched movies:', fetchedMovies.length);
             
             let filtered = filterMovies(fetchedMovies, preferences, seed);
             // Hard fallback: if only language is selected and results are tiny,
             // keep language-only list to maximize deck size.
+            // But still apply release year and highRatedOnly filters!
             if (preferences.languages?.length > 0 &&
                 (preferences.genres?.length ?? 0) === 0 &&
                 (preferences.ottPlatforms?.length ?? 0) === 0 &&
                 filtered.length < 20) {
-              filtered = fetchedMovies.filter(m =>
-                preferences.languages.includes(
-                  convertTMDBToLanguages((m as any).original_language || 'en') as any
-                )
-              );
+              filtered = filterMovies(fetchedMovies, {
+                ...preferences,
+                genres: [],
+                ottPlatforms: []
+              }, seed);
             }
-            if (preferences.languages && preferences.languages.length > 0 && filtered.length < 20) {
-              const relaxed = { ...preferences, genres: [], ottPlatforms: [], releaseYear: undefined } as any;
+            // Only relax genres/OTT if user didn't select them AND we have very few results
+            if (preferences.languages && preferences.languages.length > 0 && 
+                filtered.length < 20 &&
+                (preferences.genres?.length ?? 0) === 0 &&
+                (preferences.ottPlatforms?.length ?? 0) === 0) {
+              const relaxed = { ...preferences, genres: [], ottPlatforms: [] } as any;
               filtered = filterMovies(fetchedMovies, relaxed, seed);
             }
             console.log('🎯 Filtered/shuffled movies:', filtered.length);
@@ -279,78 +311,95 @@ export default function Home() {
             loadMovies(instantFiltered);
           }
           
-          // Hard language-only path for dual/unified - fast seed first
+          // Hard language-only path for dual/unified - stream ALL pages
           if ((prefsToUse.languages?.length ?? 0) > 0 &&
               (prefsToUse.genres?.length ?? 0) === 0 &&
               (prefsToUse.ottPlatforms?.length ?? 0) === 0) {
+            const { streamLanguageAll } = await import('@/lib/ingestion');
             const languageCodes: Record<string,string> = { English: 'en', Hindi: 'hi', Tamil: 'ta', Telugu: 'te', Malayalam: 'ml', Bengali: 'bn' };
-            // Fast seed: 3 pages for instant load
-            const seeds = await Promise.all(
-              prefsToUse.languages
-                .map(l => languageCodes[l as any])
-                .filter(Boolean)
-                .map(code => fetchLanguageSeed(code as string, 3, !!prefsToUse.adultContent))
-            );
-            const seedMovies = seeds.flat();
-            const filteredSeed = filterMovies(seedMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
-            loadMovies(filteredSeed);
             setIsLoadingMovies(false);
-            // Background: fetch remaining pages (non-blocking)
+            // Stream all pages for each language (fetches up to 500 pages each, all in background)
             // eslint-disable-next-line @typescript-eslint/no-floating-promises
             (async () => {
-              const moreSeeds = await Promise.all(
-                prefsToUse.languages
-                  .map(l => languageCodes[l as any])
-                  .filter(Boolean)
-                  .map(code => fetchLanguageSeed(code as string, 47, !!prefsToUse.adultContent))
-              );
-              const moreMovies = moreSeeds.flat();
-              const filteredMore = filterMovies(moreMovies, { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any, seed);
-              const appendMoviesFn = useStore.getState().appendMovies;
-              const newMovies = filteredMore.filter(m => !filteredSeed.some(existing => existing.id === m.id));
-              if (newMovies.length > 0) {
-                appendMoviesFn(newMovies);
-              }
+              let allLanguageMovies: Movie[] = [];
+              const seenIds = new Set<string>();
+              const languagePromises = prefsToUse.languages.map((lang) => {
+                const code = languageCodes[lang as any];
+                if (!code) return Promise.resolve();
+                return streamLanguageAll(code, { adult: !!prefsToUse.adultContent }, (chunk, isComplete) => {
+                  if (chunk.length) {
+                    // Deduplicate using Set for O(1) performance
+                    const newMovies = chunk.filter(m => {
+                      if (seenIds.has(m.id)) return false;
+                      seenIds.add(m.id);
+                      return true;
+                    });
+                    allLanguageMovies = [...allLanguageMovies, ...newMovies];
+                    const filtered = filterMovies(allLanguageMovies, prefsToUse, seed);
+                    const currentMovies = useStore.getState().movies;
+                    const currentIds = new Set(currentMovies.map(m => m.id));
+                    if (currentMovies.length === 0 && filtered.length > 0) {
+                      useStore.getState().loadMovies(filtered);
+                    } else if (filtered.length > currentMovies.length) {
+                      const newFiltered = filtered.filter(m => !currentIds.has(m.id));
+                      if (newFiltered.length > 0) useStore.getState().appendMovies(newFiltered);
+                    }
+                    // Final completion: refresh deck
+                    if (isComplete) {
+                      const finalFiltered = filterMovies(allLanguageMovies, prefsToUse, seed);
+                      useStore.getState().loadMovies(finalFiltered);
+                    }
+                  }
+                });
+              });
+              await Promise.all(languagePromises);
             })();
             return;
           }
 
           // Fetch movies from TMDB with preferences
-          console.log('🔍 Fetching movies from TMDB...');
           // Convert preferences to match fetchFilteredMovies signature
           let accumulatedMovies: Movie[] = [];
+          const seenIdsForStream = new Set<string>();
           const onProgress = (m: any[], isComplete: boolean) => {
-            // Accumulate all movies from stream
-            accumulatedMovies = [...accumulatedMovies, ...m];
-            // Deduplicate
-            const unique = accumulatedMovies.filter((movie, index, self) => 
-              index === self.findIndex(m => m.id === movie.id)
-            );
+            // Only process if we have new movies
+            if (m.length === 0 && !isComplete) return;
             
-            // Apply filters
-            const langRelaxed = (prefsToUse.languages && prefsToUse.languages.length > 0)
-              ? { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any
+            // Accumulate and deduplicate in one pass using Set
+            const newMovies = m.filter(movie => {
+              if (seenIdsForStream.has(movie.id)) return false;
+              seenIdsForStream.add(movie.id);
+              return true;
+            });
+            if (newMovies.length > 0) {
+              accumulatedMovies = [...accumulatedMovies, ...newMovies];
+            }
+            
+            // Apply filters - only relax genres/OTT if user didn't select them
+            const langRelaxed = (prefsToUse.languages && prefsToUse.languages.length > 0 &&
+                                 (prefsToUse.genres?.length ?? 0) === 0 &&
+                                 (prefsToUse.ottPlatforms?.length ?? 0) === 0)
+              ? { ...prefsToUse, genres: [], ottPlatforms: [] } as any
               : prefsToUse;
-            const filtered = filterMovies(unique, langRelaxed, seed);
+            const filtered = filterMovies(accumulatedMovies, langRelaxed, seed);
             
-            // Update deck incrementally
-            const appendMoviesFn = useStore.getState().appendMovies;
+            // Update deck incrementally - use Set for O(1) lookups
             const currentMovies = useStore.getState().movies;
+            const currentIds = new Set(currentMovies.map(m => m.id));
+            
             if (currentMovies.length === 0 && filtered.length > 0) {
-              const loadMoviesFn = useStore.getState().loadMovies;
-              loadMoviesFn(filtered);
+              useStore.getState().loadMovies(filtered);
             } else if (filtered.length > currentMovies.length) {
-              const newMovies = filtered.filter(m => !currentMovies.some(existing => existing.id === m.id));
+              const newMovies = filtered.filter(m => !currentIds.has(m.id));
               if (newMovies.length > 0) {
-                appendMoviesFn(newMovies);
+                useStore.getState().appendMovies(newMovies);
               }
             }
             
             // On final completion, do full refresh
             if (isComplete) {
-              const finalFiltered = filterMovies(unique, langRelaxed, seed);
-              const loadMoviesFn = useStore.getState().loadMovies;
-              loadMoviesFn(finalFiltered);
+              const finalFiltered = filterMovies(accumulatedMovies, langRelaxed, seed);
+              useStore.getState().loadMovies(finalFiltered);
             }
           };
           const fetchedMovies = await fetchFilteredMovies({
@@ -359,25 +408,30 @@ export default function Home() {
             languages: prefsToUse.languages,
             adultContent: prefsToUse.adultContent,
             highRatedOnly: prefsToUse.highRatedOnly,
+            releaseYear: prefsToUse.releaseYear,
+            imdbTop250Movies: prefsToUse.imdbTop250Movies,
           }, onProgress);
           console.log('📥 Fetched movies:', fetchedMovies.length);
           console.log('🎲 Using seed:', seed);
           console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
-          const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0)
-            ? { ...prefsToUse, genres: [], ottPlatforms: [], releaseYear: undefined } as any
+          // Only relax genres/OTT if user didn't select them
+          const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0 &&
+                                (prefsToUse.genres?.length ?? 0) === 0 &&
+                                (prefsToUse.ottPlatforms?.length ?? 0) === 0)
+            ? { ...prefsToUse, genres: [], ottPlatforms: [] } as any
             : prefsToUse;
           let filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
           if (prefsToUse.languages?.length > 0 &&
               (prefsToUse.genres?.length ?? 0) === 0 &&
               (prefsToUse.ottPlatforms?.length ?? 0) === 0 &&
               filtered.length < 20) {
-            filtered = fetchedMovies.filter(m =>
-              prefsToUse.languages.includes(
-                convertTMDBToLanguages((m as any).original_language || 'en') as any
-              )
-            );
+            filtered = filterMovies(fetchedMovies, {
+              ...prefsToUse,
+              genres: [],
+              ottPlatforms: []
+            }, seed);
           }
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
@@ -426,6 +480,25 @@ export default function Home() {
     }
   }, [currentScreen, preferences, loadMovies, session, isLoadingMovies, movies.length]);
 
+  // Update elapsed time periodically when loading to trigger re-render and check 10-second condition
+  useEffect(() => {
+    if (currentScreen === 'swipe' && loadingStartTime.current) {
+      const interval = setInterval(() => {
+        // Check current movies length from store (fresh value)
+        const currentMoviesCount = useStore.getState().movies.length;
+        if (currentMoviesCount >= 7) {
+          clearInterval(interval);
+          return;
+        }
+        const elapsed = loadingStartTime.current ? Date.now() - loadingStartTime.current : 0;
+        setLoadingElapsed(elapsed);
+      }, 100); // Check every 100ms for responsive updates
+      return () => clearInterval(interval);
+    }
+    // Always return cleanup function (even if condition is false)
+    return () => {};
+  }, [currentScreen, movies.length]); // Include movies.length for consistency
+
   // Render current screen
   switch (currentScreen) {
     case 'home':
@@ -470,15 +543,24 @@ export default function Home() {
         );
       }
       
-      // Show loading screen if movies are loading or empty
-      if (isLoadingMovies || movies.length === 0) {
+      // Show loading screen until we have at least 7 movies OR 10 seconds have passed
+      const timeSinceStart = loadingStartTime.current ? Date.now() - loadingStartTime.current : 0;
+      const hasEnoughMovies = movies.length >= 7;
+      const hasWaitedLongEnough = timeSinceStart >= 10000; // 10 seconds
+      const shouldShowLoading = isLoadingMovies || (!hasEnoughMovies && !hasWaitedLongEnough);
+      
+      // Log condition for debugging (dev only)
+      if (process.env.NODE_ENV === 'development' && !shouldShowLoading && movies.length < 7) {
+        console.log(`Deck loaded: ${movies.length} movies after ${Math.round(timeSinceStart / 1000)}s`);
+      }
+      
+      if (shouldShowLoading) {
         return (
           <div className="min-h-screen bg-black flex items-center justify-center p-4">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
               <p className="text-white text-xl">Loading movies...</p>
               <p className="text-gray-400 text-sm mt-2">This may take a moment...</p>
-              {loadError && <p className="text-red-400 text-xs mt-4">{loadError}</p>}
             </div>
           </div>
         );

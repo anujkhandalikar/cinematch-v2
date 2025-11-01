@@ -23,11 +23,14 @@ export default function PreferencesScreen() {
   
   const [selectedGenres, setSelectedGenres] = useState<Genre[]>(preferences.genres);
   const [selectedPlatforms, setSelectedPlatforms] = useState<OTTPlatform[]>(preferences.ottPlatforms);
-  // Languages removed from UI; will be ignored in logic
   const [adultContent, setAdultContent] = useState(preferences.adultContent);
   const [highRatedOnly, setHighRatedOnly] = useState(preferences.highRatedOnly || false);
   const [selectedLanguages, setSelectedLanguages] = useState<Language[]>(preferences.languages || []);
   const [releaseYear, setReleaseYear] = useState<'2025' | '2000s' | 'older' | null>(preferences.releaseYear);
+  const [imdbTop250Movies, setImdbTop250Movies] = useState(preferences.imdbTop250Movies || false);
+  
+  // When IMDb Top 250 Movies is enabled, disable other filters
+  const filtersDisabled = imdbTop250Movies;
 
   const handleGenreToggle = (genre: Genre) => {
     setSelectedGenres(prev => 
@@ -48,13 +51,15 @@ export default function PreferencesScreen() {
   // No-op: languages removed
 
   const handleContinue = () => {
+    // When IMDb Top 250 Movies is enabled, ignore other filters
     const newPreferences = {
-      genres: selectedGenres,
-      ottPlatforms: selectedPlatforms,
-      languages: selectedLanguages,
-      adultContent,
-      releaseYear,
-      highRatedOnly
+      genres: imdbTop250Movies ? [] : selectedGenres,
+      ottPlatforms: imdbTop250Movies ? [] : selectedPlatforms,
+      languages: imdbTop250Movies ? [] : selectedLanguages,
+      adultContent: imdbTop250Movies ? false : adultContent,
+      releaseYear: imdbTop250Movies ? null : releaseYear,
+      highRatedOnly: imdbTop250Movies ? false : highRatedOnly,
+      imdbTop250Movies
     };
     console.log('=== SAVING PREFERENCES ===');
     console.log('Selected release year:', releaseYear);
@@ -85,17 +90,44 @@ export default function PreferencesScreen() {
             </p>
           </div>
 
-          {/* High Rated Only Toggle */}
+          {/* IMDb Top 250 Filter - Moved to top */}
           <div className="mb-8">
             <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
               <div>
-                <h3 className="text-lg font-semibold text-white">Show only 8+ IMDb Rated</h3>
-                <p className="text-sm text-gray-400">Surface only highly rated movies (≥ 8.0)</p>
+                <h3 className="text-lg font-semibold text-white">IMDb Top 250 Movies</h3>
+                <p className="text-sm text-gray-400">Show only IMDb Top 250 movies</p>
               </div>
               <button
-                onClick={() => setHighRatedOnly(!highRatedOnly)}
+                onClick={() => setImdbTop250Movies(!imdbTop250Movies)}
                 className={`w-12 h-6 rounded-full transition-all ${
-                  highRatedOnly ? 'bg-red-600' : 'bg-gray-600'
+                  imdbTop250Movies ? 'bg-red-600' : 'bg-gray-600'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                  imdbTop250Movies ? 'translate-x-6' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* High Rated Only Toggle */}
+          <div className="mb-8">
+            <div className={`flex items-center justify-between p-4 rounded-lg ${
+              filtersDisabled ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
+            }`}>
+              <div>
+                <h3 className={`text-lg font-semibold ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+                  Show only 8+ Rated
+                </h3>
+                <p className={`text-sm ${filtersDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
+                  Surface only highly rated movies (≥ 8.0)
+                </p>
+              </div>
+              <button
+                onClick={() => !filtersDisabled && setHighRatedOnly(!highRatedOnly)}
+                disabled={filtersDisabled}
+                className={`w-12 h-6 rounded-full transition-all ${
+                  filtersDisabled ? 'bg-gray-700 cursor-not-allowed' : highRatedOnly ? 'bg-red-600' : 'bg-gray-600'
                 }`}
               >
                 <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
@@ -105,16 +137,22 @@ export default function PreferencesScreen() {
             </div>
           </div>
 
+
           {/* OTT Platforms Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Streaming Platforms</h2>
+          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+              Streaming Platforms
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {OTT_PLATFORMS.map((platform) => (
                 <button
                   key={platform}
-                  onClick={() => handlePlatformToggle(platform)}
+                  onClick={() => !filtersDisabled && handlePlatformToggle(platform)}
+                  disabled={filtersDisabled}
                   className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedPlatforms.includes(platform)
+                    filtersDisabled
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : selectedPlatforms.includes(platform)
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
@@ -126,15 +164,20 @@ export default function PreferencesScreen() {
           </div>
 
           {/* Language Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Language</h2>
+          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+              Language
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {(['English','Hindi','Tamil','Telugu','Malayalam','Bengali'] as Language[]).map((language) => (
                 <button
                   key={language}
-                  onClick={() => setSelectedLanguages(prev => prev.includes(language) ? prev.filter(l => l !== language) : [...prev, language])}
+                  onClick={() => !filtersDisabled && setSelectedLanguages(prev => prev.includes(language) ? prev.filter(l => l !== language) : [...prev, language])}
+                  disabled={filtersDisabled}
                   className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedLanguages.includes(language)
+                    filtersDisabled
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : selectedLanguages.includes(language)
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
@@ -146,15 +189,20 @@ export default function PreferencesScreen() {
           </div>
 
           {/* Genres Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Favorite Genres</h2>
+          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+              Favorite Genres
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {GENRES.map((genre) => (
                 <button
                   key={genre}
-                  onClick={() => handleGenreToggle(genre)}
+                  onClick={() => !filtersDisabled && handleGenreToggle(genre)}
+                  disabled={filtersDisabled}
                   className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    selectedGenres.includes(genre)
+                    filtersDisabled
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : selectedGenres.includes(genre)
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
@@ -166,8 +214,10 @@ export default function PreferencesScreen() {
           </div>
 
           {/* Release Year Section */}
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold text-white mb-4">Release Year</h2>
+          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+              Release Year
+            </h2>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { value: '2025', label: '2025' },
@@ -176,9 +226,12 @@ export default function PreferencesScreen() {
               ].map(({ value, label }) => (
                 <button
                   key={value}
-                  onClick={() => setReleaseYear(releaseYear === value ? null : value as '2025' | '2000s' | 'older')}
+                  onClick={() => !filtersDisabled && setReleaseYear(releaseYear === value ? null : value as '2025' | '2000s' | 'older')}
+                  disabled={filtersDisabled}
                   className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    releaseYear === value
+                    filtersDisabled
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : releaseYear === value
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                   }`}
@@ -191,15 +244,22 @@ export default function PreferencesScreen() {
 
           {/* Adult Content Toggle */}
           <div className="mb-8">
-            <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+            <div className={`flex items-center justify-between p-4 rounded-lg ${
+              filtersDisabled ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
+            }`}>
               <div>
-                <h3 className="text-lg font-semibold text-white">Include Adult Content</h3>
-                <p className="text-sm text-gray-400">Show R-rated movies and mature content</p>
+                <h3 className={`text-lg font-semibold ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
+                  Include Adult Content
+                </h3>
+                <p className={`text-sm ${filtersDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
+                  Show R-rated movies and mature content
+                </p>
               </div>
               <button
-                onClick={() => setAdultContent(!adultContent)}
+                onClick={() => !filtersDisabled && setAdultContent(!adultContent)}
+                disabled={filtersDisabled}
                 className={`w-12 h-6 rounded-full transition-all ${
-                  adultContent ? 'bg-red-600' : 'bg-gray-600'
+                  filtersDisabled ? 'bg-gray-700 cursor-not-allowed' : adultContent ? 'bg-red-600' : 'bg-gray-600'
                 }`}
               >
                 <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
