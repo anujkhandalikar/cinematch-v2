@@ -862,8 +862,7 @@ export default function SwipeDeck() {
           }}
         >
           <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
-            {/* Reduced poster height - changed from aspect-[3/4] to aspect-[4/3] for shorter poster */}
-            <div className="aspect-[4/3] sm:aspect-[3/2] relative">
+            <div className="aspect-[3/4] sm:aspect-[2/3] relative">
               <img
                 src={currentMovie.poster_url}
                 alt={currentMovie.title}
@@ -875,13 +874,13 @@ export default function SwipeDeck() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
             
-            <div className="p-3 sm:p-4">
+            <div className="p-2 sm:p-4">
               {/* Genres */}
-              <div className="flex flex-wrap gap-1 sm:gap-2 mb-1.5 sm:mb-2.5">
+              <div className="flex flex-wrap gap-1 sm:gap-2 mb-1 sm:mb-3">
                 {currentMovie.genres.map((genre, index) => (
                   <span
                     key={index}
-                    className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-red-600 text-white text-xs sm:text-sm rounded-full"
+                    className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-red-600 text-white text-xs rounded-full"
                   >
                     {genre}
                   </span>
@@ -889,19 +888,19 @@ export default function SwipeDeck() {
               </div>
               
               {/* Movie Details */}
-              <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-1.5 sm:mb-2">
+              <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-2 sm:mb-3">
                 <span className="font-medium">{currentMovie.year}</span>
                 <span>•</span>
                 <span className="text-yellow-400 font-medium">⭐ {currentMovie.rating % 1 === 0 ? currentMovie.rating.toFixed(0) : currentMovie.rating.toFixed(1)}/10</span>
               </div>
               
               {/* Title */}
-              <h2 className="text-base sm:text-lg font-bold text-white mb-1 sm:mb-1.5">{currentMovie.title}</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">{currentMovie.title}</h2>
               
-              {/* Synopsis - Increased text size and character limit */}
-              <p className="text-gray-300 text-sm sm:text-base leading-relaxed mb-2 sm:mb-3">
-                {currentMovie.synopsis.length > 120 
-                  ? `${currentMovie.synopsis.substring(0, 120)}...` 
+              {/* Synopsis */}
+              <p className="text-gray-300 text-xs sm:text-sm mb-2 sm:mb-3">
+                {currentMovie.synopsis.length > 80 
+                  ? `${currentMovie.synopsis.substring(0, 80)}...` 
                   : currentMovie.synopsis}
               </p>
               
