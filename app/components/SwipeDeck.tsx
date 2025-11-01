@@ -36,6 +36,7 @@ export default function SwipeDeck() {
   const [swipeDelta, setSwipeDelta] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [showNudgeModal, setShowNudgeModal] = useState(false);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes in seconds
   const [hasLikedCurrentMovie, setHasLikedCurrentMovie] = useState(false);
   
