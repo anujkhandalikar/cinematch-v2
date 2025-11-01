@@ -71,7 +71,12 @@ export default function SwipeDeck() {
   
   const startPos = useRef({ x: 0, y: 0 });
   const currentMovie = movies[currentMovieIndex];
-
+  
+  // Reset description expansion when movie changes
+  useEffect(() => {
+    setIsDescriptionExpanded(false);
+  }, [currentMovieIndex]);
+  
   // Initialize session when component mounts
   useEffect(() => {
     if (!isSessionRunning && movies.length > 0) {
