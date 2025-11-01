@@ -36,7 +36,7 @@ export default function SwipeDeck() {
   const [swipeDelta, setSwipeDelta] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [showNudgeModal, setShowNudgeModal] = useState(false);
-  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes in seconds
   const [hasLikedCurrentMovie, setHasLikedCurrentMovie] = useState(false);
   
@@ -267,6 +267,8 @@ export default function SwipeDeck() {
       }
     }
     
+    // Reset description expansion when moving to next movie
+    setIsDescriptionExpanded(false);
     nextMovie();
     if (checkEndConditions()) {
       return;
@@ -278,6 +280,9 @@ export default function SwipeDeck() {
     if (!currentMovie) return;
     
     console.log('Left swipe - skipping movie:', currentMovie.title);
+    
+    // Reset description expansion when moving to next movie
+    setIsDescriptionExpanded(false);
     
     // Move to next movie
     nextMovie();
@@ -862,20 +867,20 @@ export default function SwipeDeck() {
             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
           }}
         >
-          {/* Tap to view full description - overlay that doesn't interfere with swiping */}
+          {/* Tap to expand description - overlay that doesn't interfere with swiping */}
           <div
             onTouchEnd={(e) => {
-              // Only show modal if user tapped (not swiped)
+              // Only toggle if user tapped (not swiped)
               if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
                 e.stopPropagation();
-                setShowDescriptionModal(true);
+                setIsDescriptionExpanded(!isDescriptionExpanded);
               }
             }}
             onClick={(e) => {
-              // Only show modal if user clicked (not swiped)
+              // Only toggle if user clicked (not swiped)
               if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
                 e.stopPropagation();
-                setShowDescriptionModal(true);
+                setIsDescriptionExpanded(!isDescriptionExpanded);
               }
             }}
             className="absolute inset-0 z-10 cursor-pointer"
@@ -920,12 +925,27 @@ export default function SwipeDeck() {
               {/* Title */}
               <h2 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">{currentMovie.title}</h2>
               
-              {/* Synopsis */}
-              <p className="text-gray-300 text-xs sm:text-sm mb-2 sm:mb-3">
-                {currentMovie.synopsis.length > 80 
-                  ? `${currentMovie.synopsis.substring(0, 80)}...` 
-                  : currentMovie.synopsis}
-              </p>
+              {/* Synopsis - Expandable */}
+              <div className="mb-2 sm:mb-3">
+                <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
+                  {isDescriptionExpanded 
+                    ? currentMovie.synopsis
+                    : currentMovie.synopsis.length > 80 
+                    ? `${currentMovie.synopsis.substring(0, 80)}...` 
+                    : currentMovie.synopsis}
+                </p>
+                {currentMovie.synopsis.length > 80 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDescriptionExpanded(!isDescriptionExpanded);
+                    }}
+                    className="text-red-400 text-xs mt-1 hover:text-red-300 transition-colors"
+                  >
+                    {isDescriptionExpanded ? 'Show less' : 'Tap to read more'}
+                  </button>
+                )}
+              </div>
               
               {/* OTT Platforms */}
               {currentMovie.ott && currentMovie.ott.length > 0 && (
