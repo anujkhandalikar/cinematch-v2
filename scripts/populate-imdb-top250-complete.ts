@@ -38,7 +38,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
   console.error('');
   console.error('Current values:');
   console.error('  NEXT_PUBLIC_SUPABASE_URL:', SUPABASE_URL || '❌ NOT SET');
-  console.error('  SUPABASE_SERVICE_ROLE_KEY:', SUPABASE_SERVICE_ROLE_KEY ? '✅ SET' : '❌ NOT SET');
+  console.error('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅ SET' : '❌ NOT SET');
   console.error('  NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ SET' : '❌ NOT SET');
   process.exit(1);
 }
@@ -350,7 +350,7 @@ async function main() {
       .from('imdb_top250_movies')
       .delete()
       .neq('id', 0)
-      .select('*', { count: 'exact', head: true });
+      .select(undefined, { count: 'exact', head: true });
     
     if (deleteError && deleteError.code !== 'PGRST116') { // PGRST116 = no rows to delete
       console.warn('⚠️  Could not clear:', deleteError.message);
