@@ -831,16 +831,16 @@ export default function SwipeDeck() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col overflow-hidden touch-none">
-      {/* Header */}
-      <div className="flex justify-between items-center p-4">
-        <div className="text-white font-semibold text-sm sm:text-base">
+      {/* Header - Make likes and timer more visible */}
+      <div className="flex justify-between items-center p-4 bg-black/90 backdrop-blur-sm sticky top-0 z-40 border-b border-gray-800">
+        <div className="text-white font-bold text-base sm:text-lg bg-red-600 px-4 py-2 rounded-full">
           {session?.mode === 'dual' ? (
             <>❤️ {mutualLiked.length} mutual</>
           ) : (
             <>❤️ {likedMovies.length}</>
           )}
         </div>
-        <div className="text-white font-semibold text-sm sm:text-base">
+        <div className="text-white font-bold text-base sm:text-lg bg-green-600 px-4 py-2 rounded-full">
           ⏰ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
         </div>
       </div>
@@ -861,6 +861,28 @@ export default function SwipeDeck() {
             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
           }}
         >
+          {/* Tap to view full description - overlay that doesn't interfere with swiping */}
+          <div
+            onTouchEnd={(e) => {
+              // Only show modal if user tapped (not swiped)
+              if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
+                e.stopPropagation();
+                setShowDescriptionModal(true);
+              }
+            }}
+            onClick={(e) => {
+              // Only show modal if user clicked (not swiped)
+              if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
+                e.stopPropagation();
+                setShowDescriptionModal(true);
+              }
+            }}
+            className="absolute inset-0 z-10 cursor-pointer"
+            style={{ 
+              pointerEvents: (swipeDelta.x === 0 && swipeDelta.y === 0) ? 'auto' : 'none',
+              touchAction: 'none'
+            }}
+          />
           <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
             <div className="aspect-[3/4] sm:aspect-[2/3] relative">
               <img
