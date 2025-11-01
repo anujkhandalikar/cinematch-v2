@@ -967,6 +967,74 @@ export default function SwipeDeck() {
         </button>
       </div>
 
+      {/* Full Description Modal */}
+      {showDescriptionModal && currentMovie && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold text-white">{currentMovie.title}</h2>
+              <button
+                onClick={() => setShowDescriptionModal(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <div className="flex items-center gap-4 text-gray-400 text-sm mb-4">
+                <span>{currentMovie.year}</span>
+                <span>•</span>
+                <span className="text-yellow-400">⭐ {currentMovie.rating % 1 === 0 ? currentMovie.rating.toFixed(0) : currentMovie.rating.toFixed(1)}/10</span>
+                <span>•</span>
+                <span>{currentMovie.runtime} min</span>
+              </div>
+              
+              <div className="flex flex-wrap gap-2 mb-4">
+                {currentMovie.genres.map((genre, index) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1 bg-red-600 text-white text-sm rounded-full"
+                  >
+                    {genre}
+                  </span>
+                ))}
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white mb-2">Description</h3>
+              <p className="text-gray-300 text-base leading-relaxed whitespace-pre-wrap">
+                {currentMovie.synopsis || 'No description available.'}
+              </p>
+            </div>
+            
+            {currentMovie.ott && currentMovie.ott.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-white mb-2">Available on</h3>
+                <div className="flex flex-wrap gap-2">
+                  {currentMovie.ott.map((platform, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded"
+                    >
+                      {platform}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <button
+              onClick={() => setShowDescriptionModal(false)}
+              className="w-full bg-red-600 text-white font-bold py-3 px-6 rounded-full hover:bg-red-700 transition-all mt-4"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Nudge Modal */}
       {showNudgeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
