@@ -894,13 +894,13 @@ export default function SwipeDeck() {
               touchAction: 'none'
             }}
           />
-          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '600px', maxHeight: '80vh' }}>
+          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '700px', maxHeight: '85vh' }}>
             {/* Poster section - shrinks when description expands */}
             <div 
               className="relative flex-shrink transition-all duration-300"
               style={{ 
-                height: isDescriptionExpanded ? '35%' : '60%',
-                minHeight: isDescriptionExpanded ? '180px' : '300px'
+                height: isDescriptionExpanded ? '30%' : '65%',
+                minHeight: isDescriptionExpanded ? '200px' : '450px'
               }}
             >
               <img
@@ -918,8 +918,8 @@ export default function SwipeDeck() {
             <div 
               className="p-2 sm:p-4 flex-1 overflow-y-auto transition-all duration-300"
               style={{ 
-                height: isDescriptionExpanded ? '65%' : '40%',
-                maxHeight: isDescriptionExpanded ? '420px' : '240px'
+                height: isDescriptionExpanded ? '70%' : '35%',
+                maxHeight: isDescriptionExpanded ? '490px' : '245px'
               }}
             >
               {/* Genres */}
