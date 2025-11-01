@@ -848,7 +848,7 @@ export default function SwipeDeck() {
       {/* Movie Card */}
       <div className="flex-1 flex items-center justify-center p-1 sm:p-4 touch-none">
         <div
-          className="relative w-full max-w-[280px] sm:max-w-sm mx-auto touch-auto"
+          className="relative w-full max-w-[295px] sm:max-w-[399px] mx-auto touch-auto"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}

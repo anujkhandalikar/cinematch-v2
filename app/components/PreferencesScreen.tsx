@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore, Genre, OTTPlatform, Language } from '@/lib/store';
 
 const GENRES: Genre[] = [
@@ -31,6 +31,21 @@ export default function PreferencesScreen() {
   
   // When IMDb Top 250 Movies is enabled, disable other filters
   const filtersDisabled = imdbTop250Movies;
+  
+  // When any other filter is selected, disable and turn off IMDb filter
+  const hasOtherFilters = selectedGenres.length > 0 || 
+                          selectedPlatforms.length > 0 || 
+                          selectedLanguages.length > 0 || 
+                          releaseYear !== null || 
+                          highRatedOnly || 
+                          adultContent;
+  
+  // If other filters are selected, turn off IMDb filter
+  useEffect(() => {
+    if (hasOtherFilters && imdbTop250Movies) {
+      setImdbTop250Movies(false);
+    }
+  }, [hasOtherFilters, imdbTop250Movies]);
 
   const handleGenreToggle = (genre: Genre) => {
     setSelectedGenres(prev => 
@@ -92,15 +107,26 @@ export default function PreferencesScreen() {
 
           {/* IMDb Top 250 Filter - Moved to top */}
           <div className="mb-8">
-            <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+            <div className={`flex items-center justify-between p-4 rounded-lg ${
+              hasOtherFilters ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
+            }`}>
               <div>
-                <h3 className="text-lg font-semibold text-white">IMDb Top 250 Movies</h3>
-                <p className="text-sm text-gray-400">Show only IMDb Top 250 movies</p>
+                <h3 className={`text-lg font-semibold ${hasOtherFilters ? 'text-gray-500' : 'text-white'}`}>
+                  IMDb Top 250 Movies
+                </h3>
+                <p className={`text-sm ${hasOtherFilters ? 'text-gray-600' : 'text-gray-400'}`}>
+                  Show only IMDb Top 250 movies
+                </p>
               </div>
               <button
-                onClick={() => setImdbTop250Movies(!imdbTop250Movies)}
+                onClick={() => !hasOtherFilters && setImdbTop250Movies(!imdbTop250Movies)}
+                disabled={hasOtherFilters}
                 className={`w-12 h-6 rounded-full transition-all ${
-                  imdbTop250Movies ? 'bg-red-600' : 'bg-gray-600'
+                  hasOtherFilters 
+                    ? 'bg-gray-700 cursor-not-allowed' 
+                    : imdbTop250Movies 
+                    ? 'bg-red-600' 
+                    : 'bg-gray-600'
                 }`}
               >
                 <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
