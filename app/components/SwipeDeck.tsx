@@ -894,8 +894,15 @@ export default function SwipeDeck() {
               touchAction: 'none'
             }}
           />
-          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
-            <div className="aspect-[3/4] sm:aspect-[2/3] relative">
+          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '600px', maxHeight: '80vh' }}>
+            {/* Poster section - shrinks when description expands */}
+            <div 
+              className="relative flex-shrink transition-all duration-300"
+              style={{ 
+                height: isDescriptionExpanded ? '35%' : '60%',
+                minHeight: isDescriptionExpanded ? '180px' : '300px'
+              }}
+            >
               <img
                 src={currentMovie.poster_url}
                 alt={currentMovie.title}
@@ -907,7 +914,14 @@ export default function SwipeDeck() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
             </div>
             
-            <div className="p-2 sm:p-4">
+            {/* Text section - expands when description expands */}
+            <div 
+              className="p-2 sm:p-4 flex-1 overflow-y-auto transition-all duration-300"
+              style={{ 
+                height: isDescriptionExpanded ? '65%' : '40%',
+                maxHeight: isDescriptionExpanded ? '420px' : '240px'
+              }}
+            >
               {/* Genres */}
               <div className="flex flex-wrap gap-1 sm:gap-2 mb-1 sm:mb-3">
                 {currentMovie.genres.map((genre, index) => (
