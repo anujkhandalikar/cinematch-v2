@@ -192,7 +192,7 @@ export default function Home() {
               adultContent: preferences.adultContent,
               languages: preferences.languages,
               highRatedOnly: preferences.highRatedOnly,
-              releaseYear: preferences.releaseYear,
+              releaseYear: preferences.releaseYear as any,
               imdbTop250Movies: preferences.imdbTop250Movies,
             }, onProgress);
             console.log('📥 Fetched movies:', fetchedMovies.length);
