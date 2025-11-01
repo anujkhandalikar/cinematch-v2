@@ -408,7 +408,7 @@ export default function Home() {
             languages: prefsToUse.languages,
             adultContent: prefsToUse.adultContent,
             highRatedOnly: prefsToUse.highRatedOnly,
-            releaseYear: prefsToUse.releaseYear,
+            releaseYear: prefsToUse.releaseYear as any,
             imdbTop250Movies: prefsToUse.imdbTop250Movies,
           }, onProgress);
           console.log('📥 Fetched movies:', fetchedMovies.length);
