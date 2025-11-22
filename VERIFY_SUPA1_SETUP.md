@@ -79,3 +79,4 @@ NEXT_PUBLIC_SUPABASE_IMDB_ANON_KEY=your_supa2_anon_key
 
 
 
+

@@ -41,3 +41,4 @@ CREATE POLICY "Anyone can insert movie cards" ON movie_cards FOR INSERT WITH CHE
 CREATE POLICY "Anyone can update movie cards" ON movie_cards FOR UPDATE USING (true);
 
 
+
