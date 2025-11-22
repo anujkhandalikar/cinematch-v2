@@ -34,3 +34,12 @@ CREATE TRIGGER trigger_imdb_top250_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_imdb_top250_updated_at();
 
+
+
+
+
+
+
+
+
+

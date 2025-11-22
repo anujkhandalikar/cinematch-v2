@@ -1,11 +1,12 @@
-import type { Movie, Genre, OTTPlatform, Language } from '@/lib/store';
+import type { Movie, Genre, OTTPlatform, Language, MoodPreset } from '@/lib/store';
 import { 
   fetchPopularMovies, 
   fetchMoviesByGenre, 
   fetchTrendingMovies,
   fetchMaximumMovies,
   fetchHindiMovies,
-  // convertLanguagesToTMDB,
+  fetchTopRatedMovies,
+  convertLanguagesToTMDB,
   convertTMDBToLanguages,
   GENRE_MAP
 } from './tmdb';
@@ -21,6 +22,32 @@ function seededRandom(seed: number) {
   };
 }
 
+const INDIAN_LANGUAGE_CODES = new Set(['hi', 'ta', 'te', 'ml', 'bn', 'mr', 'kn', 'gu', 'pa']);
+
+function interleaveIndianAndGlobal(indian: Movie[], global: Movie[]): Movie[] {
+  const seen = new Set<string>();
+  const take = (list: Movie[], index: number) => {
+    const movie = list[index];
+    if (!movie) return null;
+    if (seen.has(movie.id)) return null;
+    seen.add(movie.id);
+    return movie;
+  };
+
+  const maxLength = Math.max(indian.length, global.length);
+  const output: Movie[] = [];
+
+  for (let i = 0; i < maxLength; i++) {
+    const indianPick = take(indian, i);
+    if (indianPick) output.push(indianPick);
+
+    const globalPick = take(global, i);
+    if (globalPick) output.push(globalPick);
+  }
+
+  return output;
+}
+
 // Fetch movies from TMDB based on preferences
 // 1) Serve an instant local deck (so UI never blocks)
 // 2) Fetch a fast set from TMDB (trending + popular)
@@ -30,64 +57,86 @@ export async function fetchFilteredMovies(preferences: {
   ottPlatforms: OTTPlatform[];
   languages: Language[];
   adultContent: boolean;
-  releaseYear?: number;
+  releaseYear?: number | '2025' | '2000s' | 'older' | null;
   highRatedOnly?: boolean;
   imdbTop250Movies?: boolean;
+  releaseAfterMonths?: number | null;
+  moodIncludeGenres?: Genre[];
+  moodExcludeGenres?: Genre[];
+  moodPreset?: MoodPreset | null;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
     console.log('Fetching movies from TMDB with preferences:', preferences);
     
     // Check if IMDb Top 250 filter is selected
     if (preferences.imdbTop250Movies) {
-      console.log('🎬 IMDb Top 250 filter detected!');
-      
-      try {
-        const { fetchIMDBTop250Movies } = await import('./imdb');
-        let imdbMovies: Movie[] = [];
-        
-        if (preferences.imdbTop250Movies) {
-          console.log('🎬 Fetching IMDb Top 250 Movies...');
-          const top250Movies = await fetchIMDBTop250Movies();
-          console.log(`✅ Got ${top250Movies.length} IMDb Top 250 movies (expecting ~250)`);
-          
-          if (top250Movies.length < 200) {
-            console.warn(`⚠️ Only ${top250Movies.length} movies fetched. Supabase might be empty - run update script.`);
-          }
-          
-          imdbMovies = [...imdbMovies, ...top250Movies];
-        }
-        
-        console.log(`📊 Total IMDb movies before filtering: ${imdbMovies.length}`);
-        
-        // When IMDb Top 250 Movies is enabled, don't apply other filters
-        // (IMDb Top 250 is already curated, so additional filters don't make sense)
-        const filtered = imdbMovies; // No additional filtering for IMDb Top 250
-        console.log(`📊 Total IMDb Top 250 movies: ${filtered.length}`);
-        
-        // Show progress immediately
-        if (filtered.length > 0) {
-          onProgress?.(filtered, false);
-        }
-        
-        // Return filtered IMDb results
-        onProgress?.(filtered, true);
-        return filtered;
-      } catch (error) {
-        console.error('❌ Error fetching IMDb Top 250:', error);
-        // Fall through to regular TMDB fetching as fallback
-        console.log('⚠️ Falling back to regular TMDB fetching...');
+      console.log('🎬 Critically acclaimed mode selected — using TMDB top rated feed');
+
+      const tmdbLanguages = preferences.languages && preferences.languages.length > 0
+        ? convertLanguagesToTMDB(preferences.languages)
+        : ['en-US'];
+
+      const topRatedMovies = await fetchTopRatedMovies(5, tmdbLanguages);
+      console.log(`📊 Top rated movies fetched: ${topRatedMovies.length}`);
+
+      if (topRatedMovies.length === 0) {
+        console.warn('⚠️ TMDB top rated endpoint returned no movies');
+        onProgress?.([], true);
+        return [];
       }
+
+      const filteredTopRated = filterMovies(topRatedMovies, {
+        genres: preferences.genres,
+        ottPlatforms: preferences.ottPlatforms,
+        languages: preferences.languages,
+        adultContent: preferences.adultContent,
+        releaseYear: preferences.releaseYear,
+        highRatedOnly: preferences.highRatedOnly,
+        releaseAfterMonths: preferences.releaseAfterMonths,
+        moodIncludeGenres: preferences.moodIncludeGenres,
+        moodExcludeGenres: preferences.moodExcludeGenres,
+        moodPreset: preferences.moodPreset,
+      });
+
+      const finalTopRated = [...(filteredTopRated.length > 0 ? filteredTopRated : topRatedMovies)];
+      finalTopRated.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+      onProgress?.(finalTopRated, false);
+      onProgress?.(finalTopRated, true);
+      return finalTopRated;
     }
     
-    // Instant dataset to avoid spinner
-    const instant = getCachedMovies({
-      genres: preferences.genres,
-      ottPlatforms: preferences.ottPlatforms,
-      adultContent: preferences.adultContent,
-      releaseYear: preferences.releaseYear,
-    });
-    if (instant.length > 0) {
-      onProgress?.(instant, false);
+    // CRITICAL: Skip instant cache if ANY filters are selected
+    // Only show movies that match ALL selected filters (languages, genres, OTT, etc.)
+    const hasAnyFilters = (preferences.languages?.length ?? 0) > 0 ||
+                         (preferences.genres?.length ?? 0) > 0 ||
+                         (preferences.ottPlatforms?.length ?? 0) > 0 ||
+                         (preferences.moodIncludeGenres?.length ?? 0) > 0 ||
+                         (preferences.moodExcludeGenres?.length ?? 0) > 0 ||
+                         !!preferences.releaseAfterMonths ||
+                         preferences.highRatedOnly ||
+                         preferences.imdbTop250Movies ||
+                         (preferences.releaseYear !== undefined && preferences.releaseYear !== null);
+    
+    let instant: Movie[] = [];
+    if (!hasAnyFilters) {
+      // Only load instant cache if NO filters are selected
+      instant = getCachedMovies({
+        genres: preferences.genres,
+        ottPlatforms: preferences.ottPlatforms,
+        adultContent: preferences.adultContent,
+        releaseYear: preferences.releaseYear,
+        highRatedOnly: preferences.highRatedOnly,
+        releaseAfterMonths: preferences.releaseAfterMonths,
+        moodIncludeGenres: preferences.moodIncludeGenres,
+        moodExcludeGenres: preferences.moodExcludeGenres,
+      });
+      if (instant.length > 0) {
+        console.log('⚡ No filters selected - showing instant cache');
+        onProgress?.(instant, false);
+      }
+    } else {
+      console.log('⚠️ Filters selected - skipping instant cache in fetchFilteredMovies');
     }
     // Language filtering disabled
     const languagesToUse: Language[] = [];
@@ -157,6 +206,35 @@ export async function fetchFilteredMovies(preferences: {
     try { trending = await fetchTrendingMovies('week', 1); } catch {}
     try { popular = await fetchPopularMovies(1, ['en-US']); } catch {}
     movies = [...trending, ...popular].slice(0, 200);
+
+    if (preferences.moodPreset === 'NewPopular') {
+      const indianLangs = ['hi', 'ta', 'te', 'ml', 'bn'];
+      let indianSeed: Movie[] = [];
+
+      try {
+        const indianResponses = await Promise.all(
+          indianLangs.map(code => fetchLanguageSeed(code, 3, !!preferences.adultContent))
+        );
+        indianSeed = indianResponses.flat();
+      } catch (error) {
+        console.warn('Failed to fetch Indian new/popular seed set:', error);
+      }
+
+      const isIndianMovie = (movie: Movie) =>
+        INDIAN_LANGUAGE_CODES.has((movie.original_language || '').toLowerCase());
+
+      const existingIndian = movies.filter(isIndianMovie);
+      const existingGlobal = movies.filter(movie => !isIndianMovie(movie));
+
+      const combinedIndian = [...indianSeed, ...existingIndian];
+      const combinedGlobal = existingGlobal;
+
+      if (combinedIndian.length && combinedGlobal.length) {
+        movies = interleaveIndianAndGlobal(combinedIndian, combinedGlobal);
+      } else if (combinedIndian.length) {
+        movies = interleaveIndianAndGlobal(combinedIndian, []);
+      }
+    }
     
     // If user picked specific genres and our fast path didn't yield enough,
     // fetch by those genres directly from TMDB and intersect (AND logic)
@@ -196,6 +274,26 @@ export async function fetchFilteredMovies(preferences: {
     if (!preferences.adultContent) {
       movies = movies.filter(movie => !movie.adult);
     }
+
+    // Mood-specific include/exclude filters
+    if (preferences.moodIncludeGenres && preferences.moodIncludeGenres.length > 0) {
+      movies = movies.filter(movie =>
+        preferences.moodIncludeGenres!.some((genre) => movie.genres.includes(genre))
+      );
+      console.log(`Filtered by mood include genres (${preferences.moodIncludeGenres.length}): ${movies.length} movies`);
+    }
+    if (preferences.moodExcludeGenres && preferences.moodExcludeGenres.length > 0) {
+      movies = movies.filter(movie =>
+        !preferences.moodExcludeGenres!.some((genre) => movie.genres.includes(genre))
+      );
+      console.log(`Filtered by mood exclude genres (${preferences.moodExcludeGenres.length}): ${movies.length} movies`);
+    }
+
+    if (preferences.moodPreset === 'Bollywood') {
+      movies = movies.filter(movie => movie.year >= 2000 && movie.year <= 2025);
+      console.log(`Filtered Bollywood mood range (2000-2025): ${movies.length} movies`);
+    }
+
     // High rated only - strict: rating must exist and be >= 8.0
     if (preferences.highRatedOnly) {
       movies = movies.filter(movie => movie.rating && movie.rating >= 8.0);
@@ -214,16 +312,40 @@ export async function fetchFilteredMovies(preferences: {
       movies = movies.filter(movie => matchesRelease(movie.year, preferences.releaseYear as any));
       console.log(`Filtered by release ${preferences.releaseYear}: ${movies.length} movies`);
     }
+
+    if (preferences.releaseAfterMonths && preferences.releaseAfterMonths > 0) {
+      const beforeRecencyFilter = movies;
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - preferences.releaseAfterMonths);
+      const cutoffYear = cutoff.getFullYear();
+      const recencyFiltered = movies.filter(movie => movie.year >= cutoffYear);
+      if (recencyFiltered.length > 0) {
+        movies = recencyFiltered;
+        console.log(`Filtered by recency (${preferences.releaseAfterMonths} months): ${movies.length} movies`);
+      } else {
+        console.warn(`⚠️ Recency filter (${preferences.releaseAfterMonths} months) removed all movies. Keeping pre-recency results.`);
+        movies = beforeRecencyFilter;
+      }
+    }
     
     // Remove duplicates based on movie ID
-    const uniqueMovies = movies.filter((movie, index, self) => 
-      index === self.findIndex(m => m.id === movie.id)
-    );
+    const deduped: Movie[] = [];
+    const seen = new Set<string>();
+    for (const movie of movies) {
+      if (!seen.has(movie.id)) {
+        seen.add(movie.id);
+        deduped.push(movie);
+      }
+    }
+
+    if (preferences.moodPreset !== 'NewPopular') {
+      deduped.sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    console.log(`✅ Final unique movies: ${deduped.length}`);
+    onProgress?.(deduped, true);
     
-    console.log(`✅ Final unique movies: ${uniqueMovies.length}`);
-    onProgress?.(uniqueMovies, true);
-    
-    return uniqueMovies.length > 0 ? uniqueMovies : instant;
+    return deduped.length > 0 ? deduped : instant;
   } catch (error) {
     console.error('❌ Error fetching movies from TMDB:', error);
     const instant = getCachedMovies({
@@ -231,6 +353,10 @@ export async function fetchFilteredMovies(preferences: {
       ottPlatforms: preferences.ottPlatforms,
       adultContent: preferences.adultContent,
       releaseYear: preferences.releaseYear,
+      highRatedOnly: preferences.highRatedOnly,
+      releaseAfterMonths: preferences.releaseAfterMonths,
+      moodIncludeGenres: preferences.moodIncludeGenres,
+      moodExcludeGenres: preferences.moodExcludeGenres,
     });
     onProgress?.(instant, true);
     return instant;
@@ -256,6 +382,10 @@ export function filterMovies(movies: Movie[], preferences: {
   adultContent: boolean;
   releaseYear?: number | '2025' | '2000s' | 'older' | null;
   highRatedOnly?: boolean;
+  releaseAfterMonths?: number | null;
+  moodIncludeGenres?: Genre[];
+  moodExcludeGenres?: Genre[];
+  moodPreset?: MoodPreset | null;
 }, seed?: number): Movie[] {
   console.log('Filtering movies:', movies.length, 'movies with preferences:', preferences);
   
@@ -265,6 +395,16 @@ export function filterMovies(movies: Movie[], preferences: {
       return false;
     }
     
+    if (preferences.moodIncludeGenres && preferences.moodIncludeGenres.length > 0) {
+      const hasMoodGenre = preferences.moodIncludeGenres.some((genre) => movie.genres.includes(genre));
+      if (!hasMoodGenre) return false;
+    }
+
+    if (preferences.moodExcludeGenres && preferences.moodExcludeGenres.length > 0) {
+      const hasExcluded = preferences.moodExcludeGenres.some((genre) => movie.genres.includes(genre));
+      if (hasExcluded) return false;
+    }
+
     // Genre filter with AND logic - movie must have ALL selected genres
     if (preferences.genres && preferences.genres.length > 0) {
       const hasAllGenres = preferences.genres.every((selectedGenre) => 
@@ -298,11 +438,23 @@ export function filterMovies(movies: Movie[], preferences: {
     };
     if (!matchesRelease(movie.year, preferences.releaseYear)) return false;
 
+    if (preferences.releaseAfterMonths && preferences.releaseAfterMonths > 0) {
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - preferences.releaseAfterMonths);
+      const cutoffYear = cutoff.getFullYear();
+      if (movie.year < cutoffYear) return false;
+    }
+
     // Language filter (OR across selected languages)
+    // CRITICAL: Always apply language filter to ensure movies match selected languages
+    // Even if streaming API filters by language, we should double-check for safety
     if (preferences.languages && preferences.languages.length > 0) {
       const movieLanguage = convertTMDBToLanguages(movie.original_language || 'en');
       const hasMatchingLanguage = preferences.languages.includes(movieLanguage as Language);
-      if (!hasMatchingLanguage) return false;
+      if (!hasMatchingLanguage) {
+        console.log(`🚫 Filtered out ${movie.title} - language ${movieLanguage} not in selected languages: ${preferences.languages.join(', ')}`);
+        return false;
+      }
     }
     
     // Year filter - commented out since we're not passing releaseYear in simplified preferences
@@ -315,6 +467,9 @@ export function filterMovies(movies: Movie[], preferences: {
   
   console.log('Filtered movies:', filtered.length);
 
+  // IMPORTANT: Sort by ID first to ensure deterministic input order before shuffling
+  // This ensures both users get the same order even if movies arrive in different sequences
+  filtered.sort((a, b) => a.id.localeCompare(b.id));
 
   // Shuffle with seed if provided (for dual mode consistency)
   if (seed !== undefined) {

@@ -48,3 +48,12 @@ tsx scripts/update-imdb-top250.ts
   - All other filters are disabled
   - Shows only IMDb Top 250 movies (no additional filtering)
 
+
+
+
+
+
+
+
+
+

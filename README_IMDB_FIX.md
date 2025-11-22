@@ -30,3 +30,12 @@ The API route is designed as a fallback - it scrapes on-demand which is:
 
 The update script is the proper way to handle this - run it once, store in Supabase, then enjoy instant loads.
 
+
+
+
+
+
+
+
+
+

@@ -94,41 +94,74 @@ export async function GET(request: NextRequest) {
     }
     const tmdbUrl = `${TMDB_BASE_URL}${path}?${allParams.toString()}`;
 
-    // 8) Forward request to TMDB
+    // 8) Forward request to TMDB with retry logic
     console.log(`🌐 Fetching from TMDB: ${path}`);
-    const response = await fetch(tmdbUrl, {
-      headers: TMDB_BEARER ? { 'Authorization': `Bearer ${TMDB_BEARER}`, 'Accept': 'application/json' } : { 'Accept': 'application/json' }
-    });
+    console.log(`   Full URL: ${tmdbUrl.substring(0, 100)}...`); // Log first 100 chars to avoid logging full URL with key
+    
+    let response: Response;
+    let lastError: any = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        response = await fetchWithTimeout(tmdbUrl, 20000); // 20 second timeout
+        break; // Success, exit retry loop
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`⚠️ Fetch attempt ${attempt}/${maxRetries} failed:`, error.message || error);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`   Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // All retries failed
+          console.error(`❌ All ${maxRetries} fetch attempts failed`);
+          throw new Error(`Failed to fetch from TMDB after ${maxRetries} attempts: ${error.message || 'Unknown error'}`);
+        }
+      }
+    }
     
     // 9) Bubble up TMDB errors with context for easier debugging
-    if (!response.ok) {
+    if (!response!.ok) {
       let body: any = null;
-      try { body = await response.json(); } catch {}
-      console.error(`❌ TMDB API error: ${response.status} ${response.statusText}`, body || '');
+      try { body = await response!.json(); } catch {}
+      console.error(`❌ TMDB API error: ${response!.status} ${response!.statusText}`, body || '');
       return NextResponse.json(
-        { error: `TMDB API error: ${response.status}`, details: body || null },
-        { status: response.status }
+        { error: `TMDB API error: ${response!.status}`, details: body || null },
+        { status: response!.status }
       );
     }
 
     // 10) Success — return JSON as-is
-    const data = await response.json();
-    console.log(`✅ Fetched data from TMDB: ${path}`);
+    const data = await response!.json();
+    console.log(`✅ Fetched data from TMDB: ${path} (${data.results?.length || 0} results)`);
     return NextResponse.json(data);
   } catch (error: any) {
     // 11) Network/timeout/unknown failures
     console.error('❌ Error fetching from TMDB:', error);
+    console.error('   Error type:', error.constructor?.name);
+    console.error('   Error message:', error.message);
+    console.error('   Error stack:', error.stack?.substring(0, 200));
     
     // Provide more specific error messages
-    if (error.message?.includes('timeout')) {
+    if (error.message?.includes('timeout') || error.name === 'AbortError') {
       return NextResponse.json(
         { error: 'Request timeout. Please check your connection and try again.' },
         { status: 504 }
       );
     }
     
+    if (error.message?.includes('fetch failed')) {
+      return NextResponse.json(
+        { error: 'Network error: Could not connect to TMDB API. Please check your internet connection.' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: error.message || 'Internal server error', type: error.constructor?.name },
       { status: 500 }
     );
   }

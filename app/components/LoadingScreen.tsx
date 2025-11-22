@@ -4,12 +4,27 @@ import { useState, useEffect } from 'react';
 import { useStore, UserPreferences } from '@/lib/store';
 import { fetchFilteredMovies } from '@/lib/movies';
 
+const LOADING_QUOTES = [
+  "Every great story begins with… buffering.",
+  "In a world… where your taste is questionable.",
+  "The reel spins. The world waits.",
+  "Sometimes, you have to load the movies before the movies load you.",
+  "Patience — the first act of every masterpiece.",
+  "Somewhere, a screenwriter is crying over your algorithm.",
+  "Roll camera. Load chaos.",
+  "Spinning the reel of possibilities.",
+  "Collecting movies you'll totally watch. Eventually.",
+  "Fetching films. Bracing for opinions.",
+  "Curating your next scroll marathon.",
+  "Somewhere, a server's having an existential crisis.",
+];
+
 export default function LoadingScreen() {
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
   const session = useStore((state) => state.session);
   const setMovies = useStore((state) => state.setMovies);
   const [progress, setProgress] = useState(0);
-  const [loadingText, setLoadingText] = useState('Initializing...');
+  const [selectedQuote] = useState(() => LOADING_QUOTES[Math.floor(Math.random() * LOADING_QUOTES.length)]);
 
   useEffect(() => {
     const loadMovies = async () => {
@@ -24,25 +39,19 @@ export default function LoadingScreen() {
           releaseYear: typeof base?.releaseYear === 'number' ? base?.releaseYear : undefined,
           highRatedOnly: base?.highRatedOnly ?? false,
           imdbTop250Movies: base?.imdbTop250Movies ?? false,
+          moodIncludeGenres: base?.moodIncludeGenres ?? [],
+          moodExcludeGenres: base?.moodExcludeGenres ?? [],
         };
 
-        setLoadingText('Loading movies...');
         setProgress(20);
 
         // Load movies with progress updates
         const movies = await fetchFilteredMovies(preferences, (movies, isComplete) => {
           const progressValue = isComplete ? 100 : Math.min(90, 20 + (movies.length / 50) * 70);
           setProgress(progressValue);
-          
-          if (isComplete) {
-            setLoadingText('Ready to swipe!');
-          } else {
-            setLoadingText(`Loaded ${movies.length} movies...`);
-          }
         });
 
         setProgress(100);
-        setLoadingText('Complete!');
         
         // Small delay to show completion
         setTimeout(() => {
@@ -51,7 +60,6 @@ export default function LoadingScreen() {
 
       } catch (error) {
         console.error('Error loading movies:', error);
-        setLoadingText('Error loading movies');
         // Still proceed to swipe screen
         setTimeout(() => {
           setCurrentScreen('swipe');
@@ -63,31 +71,37 @@ export default function LoadingScreen() {
   }, [session, setMovies, setCurrentScreen]);
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="text-center max-w-md">
-        <h1 className="text-3xl font-bold text-white mb-8">Loading Movies...</h1>
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 relative">
+      {/* Subtle gradient background */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0" 
+        style={{
+          background: 'radial-gradient(circle at 50% 0%, rgba(239, 68, 68, 0.03) 0%, transparent 50%)',
+        }}
+      />
+      
+      <div className="text-center max-w-2xl w-full relative z-10">
+        {/* Random Quote - Prominently displayed */}
+        <div className="mb-16">
+          <p 
+            className="text-3xl sm:text-4xl md:text-5xl font-light text-white leading-relaxed px-4"
+            style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}
+          >
+            {selectedQuote}
+          </p>
+        </div>
         
         {/* Progress Bar */}
-        <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
+        <div className="w-full max-w-md mx-auto bg-[#1a1a1a] rounded-full h-2 mb-8 overflow-hidden">
           <div 
-            className="bg-red-600 h-3 rounded-full transition-all duration-300 ease-out"
+            className="bg-red-600 h-2 rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             style={{ width: `${progress}%` }}
           />
         </div>
         
-        {/* Progress Text */}
-        <p className="text-gray-300 mb-8">{loadingText}</p>
-        
         {/* Loading Animation */}
         <div className="flex justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-        </div>
-        
-        {/* Fun Facts */}
-        <div className="mt-8 text-gray-400 text-sm">
-          <p>🎬 Finding the perfect movies for you...</p>
-          <p>💕 Matching your preferences...</p>
-          <p>🚀 Almost ready to swipe!</p>
         </div>
       </div>
     </div>

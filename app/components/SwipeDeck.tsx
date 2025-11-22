@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useStore } from '@/lib/store';
 import { Movie } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
+import { supabase, testSupabaseConnection } from '@/lib/supabase';
+import { trackEvent } from '@/lib/tracking';
 
 const TIMER_DURATION = 180000; // 3 minutes in milliseconds
 
@@ -39,6 +41,15 @@ export default function SwipeDeck() {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [timeLeft, setTimeLeft] = useState(180); // 3 minutes in seconds
   const [hasLikedCurrentMovie, setHasLikedCurrentMovie] = useState(false);
+  const [showSimpleRulesPopup, setShowSimpleRulesPopup] = useState(true);
+  const [isExiting, setIsExiting] = useState(false);
+  const [pendingSwipe, setPendingSwipe] = useState<'right' | 'left' | null>(null);
+  const exitDirectionRef = useRef<'right' | 'left' | null>(null);
+  
+  // Framer Motion values for smooth animations
+  const x = useMotionValue(0);
+  const rotate = useSpring(useTransform(x, [-300, 300], [-30, 30]), { stiffness: 300, damping: 30 });
+  const cardOpacity = useMotionValue(1);
   
   // Track likes properly according to flow diagram
   const [userLiked, setUserLiked] = useState<Movie[]>([]);
@@ -64,6 +75,80 @@ export default function SwipeDeck() {
   useEffect(() => {
     mutualLikedRef.current = mutualLiked;
   }, [mutualLiked]);
+
+  // CRITICAL: Recalculate mutual matches whenever partner likes or user likes change
+  useEffect(() => {
+    if (session?.mode !== 'dual') return;
+    
+    console.log('🔄 Recalculating mutual matches...');
+    console.log('User liked count:', userLiked.length);
+    console.log('User liked:', userLiked.map(m => ({ title: m.title, id: m.id })));
+    console.log('Partner liked count:', partnerLiked.length);
+    console.log('Partner liked:', partnerLiked.map(m => ({ title: m.title, id: m.id })));
+    console.log('Current mutual liked count:', mutualLiked.length);
+    console.log('Current mutual liked:', mutualLiked.map(m => ({ title: m.title, id: m.id })));
+    
+    // Find all movies that both users have liked
+    const userLikedIds = new Set(userLiked.map(m => m.id));
+    const currentMutualIds = new Set(mutualLiked.map(m => m.id));
+    
+    console.log('User liked IDs:', Array.from(userLikedIds));
+    console.log('Partner liked IDs:', partnerLiked.map(m => m.id));
+    console.log('Current mutual IDs:', Array.from(currentMutualIds));
+    
+    const newMutualMatches = partnerLiked.filter(partnerMovie => {
+      const isMutual = userLikedIds.has(partnerMovie.id);
+      const alreadyInMutual = currentMutualIds.has(partnerMovie.id);
+      if (isMutual && !alreadyInMutual) {
+        console.log(`🎯 Found new mutual match: ${partnerMovie.title} (ID: ${partnerMovie.id})`);
+      } else if (isMutual && alreadyInMutual) {
+        console.log(`⚠️ ${partnerMovie.title} is already in mutual list`);
+      } else if (!isMutual) {
+        console.log(`❌ ${partnerMovie.title} is not mutual (user hasn't liked it yet)`);
+      }
+      return isMutual && !alreadyInMutual;
+    });
+    
+    if (newMutualMatches.length > 0) {
+      console.log('🎉 FOUND NEW MUTUAL MATCHES:', newMutualMatches.map(m => m.title));
+      setMutualLiked(prev => {
+        const updated = [...prev];
+        newMutualMatches.forEach(match => {
+          if (!updated.some(m => m.id === match.id)) {
+            updated.push(match);
+          }
+        });
+        console.log('💾 Updated mutualLiked state (from useEffect):', updated.length, 'total matches');
+        console.log('💾 Updated mutualLiked:', updated.map(m => ({ title: m.title, id: m.id })));
+        return updated;
+      });
+      
+      // Update session state
+      setTimeout(() => {
+        const finalMutual = [...mutualLikedRef.current, ...newMutualMatches];
+        console.log('💾 STORING MUTUAL MATCHES IN SESSION (from useEffect):', finalMutual.length, 'matches');
+        console.log('💾 Mutual match movies:', finalMutual.map(m => ({ title: m.title, id: m.id })));
+        setDualModeState({ mutualLikes: finalMutual });
+        
+        // Verify storage
+        const storedSession = useStore.getState().session;
+        console.log('✅ VERIFIED: Session mutualLikes count:', storedSession?.mutualLikes?.length || 0);
+        console.log('✅ VERIFIED: Session mutualLikes:', storedSession?.mutualLikes?.map((m: Movie) => ({ title: m.title, id: m.id })) || []);
+        
+        // Force UI update by triggering a re-render
+        console.log('🔄 Triggering UI update for mutual matches');
+      }, 0);
+    } else {
+      console.log('No new mutual matches found');
+      console.log('Debug: Why no matches?', {
+        userLikedCount: userLiked.length,
+        partnerLikedCount: partnerLiked.length,
+        userLikedIds: Array.from(userLikedIds),
+        partnerLikedIds: partnerLiked.map(m => m.id),
+        intersection: partnerLiked.filter(m => userLikedIds.has(m.id)).map(m => m.title)
+      });
+    }
+  }, [userLiked, partnerLiked, session?.mode]); // Removed mutualLiked from deps to avoid infinite loop
   
   useEffect(() => {
     newMutualSinceNudgeRef.current = newMutualSinceNudge;
@@ -72,6 +157,38 @@ export default function SwipeDeck() {
   const startPos = useRef({ x: 0, y: 0 });
   const currentMovie = movies[currentMovieIndex];
   
+  // Test Supabase connection on mount (dual mode only)
+  useEffect(() => {
+    if (session?.mode === 'dual' && typeof window !== 'undefined') {
+      console.log('🧪 Running Supabase connection test...');
+      testSupabaseConnection().catch(err => {
+        console.error('Failed to test Supabase connection:', err);
+      });
+    }
+  }, [session?.mode]);
+  
+  // Track page visit
+  useEffect(() => {
+    trackEvent({ event: 'Deck_Page_Visited' });
+  }, []);
+
+  // Track deck loaded
+  useEffect(() => {
+    if (movies.length > 0 && currentMovieIndex === 0) {
+      trackEvent({ event: 'Deck_Loaded', title: `Loaded ${movies.length} movies` });
+    }
+  }, [movies.length, currentMovieIndex]);
+
+  // Auto-dismiss Simple Rules popup after 5 seconds
+  useEffect(() => {
+    if (showSimpleRulesPopup) {
+      const timer = setTimeout(() => {
+        setShowSimpleRulesPopup(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSimpleRulesPopup]);
+
   // Reset description expansion when movie changes
   useEffect(() => {
     setIsDescriptionExpanded(false);
@@ -94,7 +211,10 @@ export default function SwipeDeck() {
         // Dual mode: Initialize according to flow diagram
         setUserLiked([]);
         setPartnerLiked([]);
-        setMutualLiked([]);
+        // Initialize mutualLiked from session state if it exists
+        const initialMutualLikes = session?.mutualLikes || [];
+        setMutualLiked(initialMutualLikes);
+        console.log('🔄 Initializing mutualLiked from session:', initialMutualLikes.length, 'matches');
         resetNewMutualSinceNudge();
         
         console.log('Dual mode session initialized:', {
@@ -165,6 +285,12 @@ export default function SwipeDeck() {
       return;
     }
     
+    trackEvent({ 
+      event: 'Movie_Swiped', 
+      direction: 'right', 
+      title: currentMovie.title 
+    });
+    
     setHasLikedCurrentMovie(true);
     addLikedMovie(currentMovie); // Add to global liked movies for display
     
@@ -184,19 +310,41 @@ export default function SwipeDeck() {
       if (session?.supabaseSession) {
         try {
           console.log('Syncing movie like with Supabase...');
+          console.log('Movie:', currentMovie.title, 'ID:', currentMovie.id);
+          console.log('Session ID:', session.supabaseSession.id);
+          console.log('User ID:', session.userId);
           await addMovieLike(currentMovie);
           console.log('✅ Movie like synced with partner via Supabase');
-        } catch (error) {
+        } catch (error: any) {
           console.error('❌ Error syncing movie like:', error);
+          console.error('Error details:', {
+            message: error?.message,
+            code: error?.code,
+            details: error?.details,
+            hint: error?.hint
+          });
+          // Continue even if Supabase fails - mutual matches can still work via polling
+          console.warn('⚠️ Continuing without Supabase sync - will use polling fallback');
         }
+      } else {
+        console.warn('⚠️ No Supabase session - mutual matches will not sync');
       }
       
       // Also check if this movie is already in mutualLiked to prevent duplicates
       const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
       
-      // Check for mutuality by querying database directly (not from local state)
+      // Check for mutuality - use local state for fallback mode, Supabase for Supabase mode
       let isMutual = false;
-      if (session?.supabaseSession && session?.userId) {
+      
+      // First check local state (works in both modes)
+      const partnerHasLiked = partnerLiked.some(movie => movie.id === currentMovie.id);
+      if (partnerHasLiked) {
+        console.log('✅ Partner already liked this movie (from local state):', currentMovie.title);
+        isMutual = true;
+      }
+      
+      // Also check Supabase if available (for real-time sync)
+      if (!isMutual && session?.supabaseSession && session?.userId) {
         try {
           console.log('🔍🔍🔍 CHECKING FOR MUTUALITY IN DATABASE 🔍🔍🔍');
           console.log('Movie:', currentMovie.title);
@@ -220,7 +368,8 @@ export default function SwipeDeck() {
           isMutual = !!(data && data.length > 0);
           console.log('Is mutual?', isMutual);
         } catch (err) {
-          console.error('Error checking mutuality in database:', err);
+          console.warn('Error checking mutuality in database (using fallback):', err);
+          // In fallback mode, rely on local state check above
         }
       }
       
@@ -231,8 +380,15 @@ export default function SwipeDeck() {
         
         // Defer all state updates to avoid React render errors
         setTimeout(() => {
-          // Update session with mutual likes
+          // Update session with mutual likes - CRITICAL: This must be called to persist mutual matches
+          console.log('💾 STORING MUTUAL MATCHES IN SESSION:', newMutualLiked.length, 'matches');
+          console.log('💾 Mutual match movies:', newMutualLiked.map(m => ({ title: m.title, id: m.id })));
           setDualModeState({ mutualLikes: newMutualLiked });
+          
+          // Verify it was stored
+          const storedSession = useStore.getState().session;
+          console.log('✅ VERIFIED: Session mutualLikes count:', storedSession?.mutualLikes?.length || 0);
+          console.log('✅ VERIFIED: Session mutualLikes:', storedSession?.mutualLikes?.map((m: Movie) => ({ title: m.title, id: m.id })) || []);
           
           // Increment the counter
           incrementNewMutualSinceNudge();
@@ -256,6 +412,12 @@ export default function SwipeDeck() {
         }, 0);
       } else if (!isMutual) {
         console.log('Not a mutual match yet, waiting for partner to like:', currentMovie.title);
+        console.log('Debug info:', {
+          partnerLikedCount: partnerLiked.length,
+          partnerLikedIds: partnerLiked.map(m => m.id),
+          currentMovieId: currentMovie.id,
+          partnerHasLiked: partnerLiked.some(movie => movie.id === currentMovie.id)
+        });
       } else if (alreadyMutual) {
         console.log('Movie already marked as mutual, skipping');
       }
@@ -283,6 +445,12 @@ export default function SwipeDeck() {
   // Handle left swipe (skip)
   const handleSwipeLeft = () => {
     if (!currentMovie) return;
+    
+    trackEvent({ 
+      event: 'Movie_Swiped', 
+      direction: 'left', 
+      title: currentMovie.title 
+    });
     
     console.log('Left swipe - skipping movie:', currentMovie.title);
     
@@ -384,6 +552,12 @@ export default function SwipeDeck() {
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
+    // Check if the touch is on the description area or button
+    const target = e.target as HTMLElement;
+    if (target.closest('.description-area') || target.closest('.read-more-button')) {
+      // Don't start dragging if clicking on description area
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     const touch = e.touches[0];
@@ -400,7 +574,14 @@ export default function SwipeDeck() {
     const deltaX = touch.clientX - startPos.current.x;
     const deltaY = touch.clientY - startPos.current.y;
     
-    setSwipeDelta({ x: deltaX, y: deltaY });
+    // Only allow horizontal movement - ignore vertical movement
+    // Only update if horizontal movement is dominant
+    if (Math.abs(deltaX) > Math.abs(deltaY) || Math.abs(deltaY) < 10) {
+      setSwipeDelta({ x: deltaX, y: 0 });
+    } else {
+      // If vertical movement is dominant, don't update delta
+      return;
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -422,6 +603,12 @@ export default function SwipeDeck() {
 
   // Mouse handlers for desktop
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Check if the click is on the description area or button
+    const target = e.target as HTMLElement;
+    if (target.closest('.description-area') || target.closest('.read-more-button')) {
+      // Don't start dragging if clicking on description area
+      return;
+    }
     startPos.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
   };
@@ -432,7 +619,10 @@ export default function SwipeDeck() {
     const deltaX = e.clientX - startPos.current.x;
     const deltaY = e.clientY - startPos.current.y;
     
-    setSwipeDelta({ x: deltaX, y: deltaY });
+    // Only allow horizontal movement - ignore vertical movement
+    if (Math.abs(deltaX) > Math.abs(deltaY) || Math.abs(deltaY) < 10) {
+      setSwipeDelta({ x: deltaX, y: 0 });
+    }
   };
 
   const handleMouseUp = () => {
@@ -449,6 +639,59 @@ export default function SwipeDeck() {
     
     setSwipeDelta({ x: 0, y: 0 });
   };
+
+  // Helper function to trigger swipe animation programmatically
+  const triggerSwipeAnimation = (direction: 'right' | 'left') => {
+    if (isExiting) return;
+    
+    setIsExiting(true);
+    setPendingSwipe(direction);
+    exitDirectionRef.current = direction;
+    // Immediately update movie index to trigger AnimatePresence exit
+    if (direction === 'right') {
+      handleSwipeRight();
+    } else {
+      handleSwipeLeft();
+    }
+  };
+
+  // Keyboard support for desktop interactions
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const activeTag = activeElement?.tagName.toLowerCase();
+
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || activeElement?.hasAttribute('contenteditable')) {
+        return;
+      }
+
+      // Enter selects the current movie (same as swipe right)
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        triggerSwipeAnimation('right');
+        return;
+      }
+
+      // Arrow keys (and WASD) for swiping
+      if (event.key === 'ArrowRight' || event.key === 'd' || event.key === 'D') {
+        event.preventDefault();
+        triggerSwipeAnimation('right');
+        return;
+      }
+
+      if (event.key === 'ArrowLeft' || event.key === 'a' || event.key === 'A') {
+        event.preventDefault();
+        triggerSwipeAnimation('left');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExiting, x]);
 
   // Reset hasLikedCurrentMovie when moving to new movie
   useEffect(() => {
@@ -596,12 +839,25 @@ export default function SwipeDeck() {
   // Fallback: Poll database for partner likes every 2 seconds
   useEffect(() => {
     if (session?.mode === 'dual' && session?.supabaseSession && session?.userId) {
-      console.log('Setting up polling for partner likes');
+      console.log('🔵 Setting up polling for partner likes');
+      console.log('   Session ID:', session.supabaseSession.id);
+      console.log('   User ID:', session.userId);
+      console.log('   Mode:', session.mode);
       
       const pollPartnerLikes = async () => {
-        if (!session.supabaseSession || !session.userId) return;
+        if (!session.supabaseSession || !session.userId) {
+          console.warn('⚠️ Cannot poll - missing session or userId');
+          return;
+        }
         
         try {
+          console.log('🔵 Polling partner likes:', {
+            sessionId: session.supabaseSession.id,
+            userId: session.userId,
+            table: 'movie_likes',
+            query: `session_id=eq.${session.supabaseSession.id} AND user_id!=${session.userId}`
+          });
+          
           const { data, error } = await supabase
             .from('movie_likes')
             .select('*')
@@ -609,25 +865,73 @@ export default function SwipeDeck() {
             .neq('user_id', session.userId); // Only get partner's likes
           
           if (error) {
-            console.error('Error fetching partner likes:', error);
+            console.error('❌ Error fetching partner likes:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code,
+              status: (error as any).status,
+              statusText: (error as any).statusText,
+              response: (error as any).response,
+              fullError: error
+            });
+            
+            // Check if it's a table not found error
+            if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
+              console.error('❌ TABLE NOT FOUND: movie_likes table does not exist in Supabase');
+              console.error('   Please create the table using the SQL schema in SUPABASE_SETUP.md');
+            }
+            
+            // Check if it's a permission error
+            if (error.code === '42501' || error.message?.includes('permission denied')) {
+              console.error('❌ PERMISSION DENIED: Check Row Level Security (RLS) policies');
+              console.error('   The anon key may not have permission to read movie_likes');
+            }
+            
+            // Don't return - continue with empty array to allow retry
             return;
           }
           
+          console.log('📥 Polled partner likes - count:', data?.length || 0);
+          console.log('📥 Raw data from DB:', data);
+          
           if (data && data.length > 0) {
             console.log('📥 Polled partner likes from DB:', data.length);
+            console.log('📥 Sample like record:', data[0]);
             
             // Update partnerLiked with movies from database
             const partnerMovies = data
-              .map((like: any) => like.movie_data)
-              .filter((movie: any) => movie && movie.id && movie.title); // Filter out null/undefined/empty objects
+              .map((like: any) => {
+                console.log('📥 Processing like record:', {
+                  user_id: like.user_id,
+                  movie_id: like.movie_id,
+                  has_movie_data: !!like.movie_data,
+                  movie_data_type: typeof like.movie_data
+                });
+                return like.movie_data;
+              })
+              .filter((movie: any) => {
+                const isValid = movie && movie.id && movie.title;
+                if (!isValid) {
+                  console.warn('⚠️ Filtered out invalid movie:', movie);
+                }
+                return isValid;
+              }); // Filter out null/undefined/empty objects
             
             // Remove duplicates based on movie ID
             const uniqueMovies = partnerMovies.filter((movie, index, self) => 
               index === self.findIndex(m => m && m.id === movie.id)
             );
             
-            setPartnerLiked(uniqueMovies);
-            console.log('✅ Updated partnerLiked from polling:', uniqueMovies.map((m: any) => ({ title: m?.title, id: m?.id })));
+            console.log('📥 Partner movies after processing:', uniqueMovies.length);
+            console.log('📥 Partner movies:', uniqueMovies.map((m: any) => ({ title: m?.title, id: m?.id })));
+            
+            if (uniqueMovies.length > 0) {
+              setPartnerLiked(uniqueMovies);
+              console.log('✅ Updated partnerLiked from polling:', uniqueMovies.map((m: any) => ({ title: m?.title, id: m?.id })));
+            } else {
+              console.warn('⚠️ No valid partner movies found after processing');
+            }
             
             // Check for retroactive mutual matches: Did user already like any of the partner's movies?
             const currentUserLikedIds = userLikedRef.current
@@ -636,11 +940,14 @@ export default function SwipeDeck() {
             
             console.log('🔍 POLLING: Checking for retroactive mutual matches...');
             console.log('Current user liked IDs:', currentUserLikedIds);
+            console.log('Current user liked movies:', userLikedRef.current.map(m => ({ title: m.title, id: m.id })));
             console.log('Partner liked IDs:', uniqueMovies.map((m: any) => m.id));
+            console.log('Partner liked movies:', uniqueMovies.map((m: any) => ({ title: m?.title, id: m?.id })));
             
             const newMutualMatches = uniqueMovies.filter((partnerMovie: any) => {
               const isMutual = currentUserLikedIds.includes(partnerMovie.id);
               const alreadyMutual = mutualLikedRef.current.some(m => m.id === partnerMovie.id);
+              console.log(`Checking ${partnerMovie?.title}: isMutual=${isMutual}, alreadyMutual=${alreadyMutual}`);
               return isMutual && !alreadyMutual;
             });
             
@@ -659,13 +966,21 @@ export default function SwipeDeck() {
                     newMutualLiked.push(newMatch);
                   }
                 });
+                console.log('💾 Updated mutualLiked state:', newMutualLiked.map(m => ({ title: m.title, id: m.id })));
                 return newMutualLiked;
               });
               
               // Defer state updates to avoid React render errors
               setTimeout(() => {
-                // Update session with mutual likes
-                setDualModeState({ mutualLikes: [...mutualLikedRef.current, ...newMutualMatches] });
+                // Update session with mutual likes - use the updated state
+                const finalMutualLikes = [...mutualLikedRef.current, ...newMutualMatches];
+                console.log('💾 STORING MUTUAL MATCHES IN SESSION (from polling):', finalMutualLikes.length, 'matches');
+                console.log('💾 Mutual match movies:', finalMutualLikes.map(m => ({ title: m.title, id: m.id })));
+                setDualModeState({ mutualLikes: finalMutualLikes });
+                
+                // Verify it was stored
+                const storedSession = useStore.getState().session;
+                console.log('✅ VERIFIED: Session mutualLikes count:', storedSession?.mutualLikes?.length || 0);
                 
                 // Increment counter ONCE for all new matches
                 for (let i = 0; i < countNewMutual; i++) {
@@ -820,6 +1135,148 @@ export default function SwipeDeck() {
     }
   }, [session?.mode, session?.supabaseSession?.id]);
 
+  // Helper function to render card content
+  const renderCardContent = (movie: Movie, isNextCard: boolean = false) => (
+    <div className="bg-[#0a0a0a] rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col border border-[#1a1a1a]" style={{ height: '100%', maxHeight: '100%', minHeight: 0 }}>
+      {/* Poster Image - Fixed at top with proper aspect ratio and gradient fade */}
+      <div 
+        className="relative w-full flex-shrink-0 cursor-pointer"
+        style={{ aspectRatio: '2/3', minHeight: '180px', maxHeight: '60%' }}
+        onTouchEnd={(e) => {
+          // Only toggle if user tapped (not swiped)
+          if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging && !isNextCard) {
+            e.stopPropagation();
+            setIsDescriptionExpanded(!isDescriptionExpanded);
+          }
+        }}
+        onClick={(e) => {
+          // Only toggle if user clicked (not swiped)
+          if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging && !isNextCard) {
+            e.stopPropagation();
+            setIsDescriptionExpanded(!isDescriptionExpanded);
+          }
+        }}
+      >
+        <img
+          src={movie.poster_url}
+          alt={movie.title}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            e.currentTarget.src = '/placeholder-movie.jpg';
+          }}
+        />
+        {/* Smooth gradient fade only at bottom edge to blend with info section */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0a0a] to-transparent pointer-events-none" style={{ height: '60px' }} />
+      </div>
+      
+      {/* Text Content Section - Scrollable and expandable */}
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+        <div 
+          className="flex-1 overflow-y-auto min-h-0"
+          style={{ 
+            touchAction: 'pan-y',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          <div className="p-4 sm:p-5 flex flex-col gap-3 sm:gap-4 pb-4">
+            {/* Genres - Outlined red pills with hover animation */}
+            <div className="flex flex-wrap gap-2">
+              {movie.genres.map((genre, index) => (
+                <span
+                  key={index}
+                  className="px-3 py-1.5 border border-red-500/60 text-red-400 text-xs rounded-full font-light hover:border-red-500 hover:bg-red-500/10 hover:text-red-300 transition-all duration-300 cursor-default"
+                >
+                  {genre}
+                </span>
+              ))}
+            </div>
+            
+            {/* Year and Rating - One row with flex spacing */}
+            <div className="flex items-center gap-2 text-gray-400 text-xs sm:text-sm">
+              <span className="font-light">{movie.year}</span>
+              <span className="text-gray-600">•</span>
+              <span className="text-red-500 font-light flex items-center gap-1">
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20">
+                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
+                </svg>
+                {movie.rating % 1 === 0 ? movie.rating.toFixed(0) : movie.rating.toFixed(1)}/10
+              </span>
+            </div>
+            
+            {/* Title - Semi-bold white with slight glow */}
+            <h2 className="text-lg sm:text-xl font-light text-white leading-tight" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
+              {movie.title}
+            </h2>
+            
+            {/* Description - Line-clamped with gentle fade */}
+            <div className="relative description-area">
+              <div
+                className={`text-gray-400 text-xs sm:text-sm leading-relaxed ${!isDescriptionExpanded || isNextCard ? 'line-clamp-3' : ''}`}
+                style={(!isDescriptionExpanded || isNextCard) ? {
+                  maskImage: 'linear-gradient(to bottom, black 0%, black 85%, transparent 100%)',
+                  WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 85%, transparent 100%)',
+                } : {}}
+              >
+                {movie.synopsis || 'No description available.'}
+              </div>
+              {movie.synopsis && movie.synopsis.length > 150 && !isNextCard && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDescriptionExpanded(!isDescriptionExpanded);
+                  }}
+                  className="read-more-button mt-2 text-red-400 text-xs sm:text-sm font-light hover:text-red-300 transition-colors cursor-pointer"
+                >
+                  {isDescriptionExpanded ? 'Read less' : 'Read more'}
+                </button>
+              )}
+            </div>
+            
+            {/* Streaming Platforms - Flat red outline pills */}
+            {movie.ott && movie.ott.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {movie.ott.map((platform, index) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1.5 border border-red-500/60 text-red-400 text-xs sm:text-sm rounded-full font-light hover:bg-red-500 hover:border-red-500 hover:text-white transition-all duration-300 cursor-default"
+                  >
+                    {platform}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            {/* Adult Content Warning */}
+            {movie.adult && (
+              <div className="text-red-500/80 text-xs font-light pt-1">
+                ⚠️ Adult Content
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Calculate overlay opacity based on swipe distance
+  const likeOpacity = useTransform(x, [50, 100], [0, 1], { clamp: true });
+  const nopeOpacity = useTransform(x, [-100, -50], [1, 0], { clamp: true });
+  
+  // Get next movie for stacking effect
+  const nextMoviePreview = movies[currentMovieIndex + 1];
+  
+  // Reset x position when movie changes
+  useEffect(() => {
+    // Reset all animation states immediately when movie index changes
+    x.set(0);
+    cardOpacity.set(1);
+    setIsExiting(false);
+    setPendingSwipe(null);
+    exitDirectionRef.current = null;
+    setIsDragging(false);
+    setSwipeDelta({ x: 0, y: 0 });
+  }, [currentMovieIndex]);
+
   // Show loading or end state
   if (!currentMovie || currentMovieIndex >= movies.length) {
     return (
@@ -841,195 +1298,260 @@ export default function SwipeDeck() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col overflow-hidden touch-none">
+    <div 
+      className="bg-black overflow-hidden touch-none" 
+      style={{ 
+        height: '100vh', 
+        maxHeight: '100vh', 
+        display: 'grid', 
+        gridTemplateRows: 'auto 1fr auto',
+        overflowY: 'hidden',
+        overflowX: 'hidden',
+        touchAction: 'none',
+        position: 'fixed',
+        width: '100%',
+        top: 0,
+        left: 0
+      }}
+    >
+      {/* Simple Rules Popup - Glassmorphism with blurred background */}
+      {showSimpleRulesPopup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 max-w-md w-full text-center shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+            <h2 className="text-xl sm:text-2xl font-light text-white mb-3" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
+              Rules
+            </h2>
+            <p 
+              className="text-base sm:text-lg text-gray-300 italic font-light leading-relaxed mb-6"
+              style={{
+                letterSpacing: '0.02em',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+              }}
+            >
+              Swipe right to yes. Left to no. Revolutionary I know :)
+            </p>
+            <button
+              onClick={() => setShowSimpleRulesPopup(false)}
+              className="bg-white text-black font-light py-2.5 px-8 rounded-full hover:bg-red-50 active:bg-red-100 transition-all duration-300 text-sm sm:text-base"
+            >
+              Okay
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header - Make likes and timer more visible */}
-      <div className="flex justify-between items-center p-4 bg-black/90 backdrop-blur-sm sticky top-0 z-40 border-b border-gray-800">
-        <div className="text-white font-bold text-base sm:text-lg bg-red-600 px-4 py-2 rounded-full">
+      <div className="flex justify-between items-center p-2 bg-black/90 backdrop-blur-sm border-b border-gray-800" style={{ minHeight: 'fit-content' }}>
+        <div className="text-white font-bold text-sm bg-red-600 px-3 py-1.5 rounded-full">
           {session?.mode === 'dual' ? (
-            <>❤️ {mutualLiked.length} mutual</>
+            <>❤️ {(() => {
+              // Use the maximum of session and local state to ensure we show the correct count
+              const sessionCount = session?.mutualLikes?.length || 0;
+              const localCount = mutualLiked.length;
+              const displayCount = Math.max(sessionCount, localCount);
+              
+              // Debug logging in development
+              if (process.env.NODE_ENV === 'development' && displayCount === 0 && (userLiked.length > 0 || partnerLiked.length > 0)) {
+                console.log('🔍 Mutual count debug (display):', {
+                  sessionCount,
+                  localCount,
+                  displayCount,
+                  userLikedCount: userLiked.length,
+                  partnerLikedCount: partnerLiked.length,
+                  userLikedIds: userLiked.map(m => m.id),
+                  partnerLikedIds: partnerLiked.map(m => m.id),
+                  intersection: partnerLiked.filter(m => userLiked.some(u => u.id === m.id)).map(m => m.title)
+                });
+              }
+              
+              return displayCount;
+            })()} mutual</>
           ) : (
             <>❤️ {likedMovies.length}</>
           )}
         </div>
-        <div className="text-white font-bold text-base sm:text-lg bg-green-600 px-4 py-2 rounded-full">
+        {/* Swipe instruction - centered */}
+        <div className="text-center flex-1">
+          <p className="text-gray-400 text-sm italic font-light">
+            ← Swipe →
+          </p>
+        </div>
+        <div className="text-white font-bold text-sm bg-gray-700 px-3 py-1.5 rounded-full">
           ⏰ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
         </div>
       </div>
 
-      {/* Movie Card */}
-      <div className="flex-1 flex items-center justify-center p-1 sm:p-4 touch-none">
-        <div
-          className="relative w-full max-w-[295px] sm:max-w-[399px] mx-auto touch-auto"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          style={{
-            transform: `translate(${swipeDelta.x}px, ${swipeDelta.y}px) rotate(${swipeDelta.x * 0.1}deg)`,
-            transition: isDragging ? 'none' : 'transform 0.3s ease-out',
-          }}
-        >
-          {/* Tap to expand description - overlay that doesn't interfere with swiping */}
+      {/* Movie Card Container */}
+      <div 
+        className="flex items-center justify-center py-1 px-0 touch-none overflow-hidden relative" 
+        style={{ 
+          minHeight: 0, 
+          maxHeight: '100%', 
+          overflow: 'hidden',
+          overflowY: 'hidden',
+          overflowX: 'hidden',
+          touchAction: 'pan-x',
+          WebkitOverflowScrolling: 'touch'
+        }}
+      >
+        {/* Next Card Preview (Stacking Effect) */}
+        {nextMoviePreview && (
           <div
-            onTouchEnd={(e) => {
-              // Only toggle if user tapped (not swiped)
-              if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
-                e.stopPropagation();
-                setIsDescriptionExpanded(!isDescriptionExpanded);
-              }
+            className="absolute w-full max-w-[95%] sm:max-w-[399px] mx-auto"
+            style={{
+              height: '100%',
+              maxHeight: '100%',
+              width: '100%',
+              transform: 'scale(0.95)',
+              opacity: 0.6,
+              zIndex: 0,
+              pointerEvents: 'none',
             }}
-            onClick={(e) => {
-              // Only toggle if user clicked (not swiped)
-              if (swipeDelta.x === 0 && swipeDelta.y === 0 && !isDragging) {
-                e.stopPropagation();
-                setIsDescriptionExpanded(!isDescriptionExpanded);
-              }
-            }}
-            className="absolute inset-0 z-10 cursor-pointer"
-            style={{ 
-              pointerEvents: (swipeDelta.x === 0 && swipeDelta.y === 0) ? 'auto' : 'none',
-              touchAction: 'none'
-            }}
-          />
-          <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col" style={{ height: '750px', maxHeight: '90vh' }}>
-            {/* Poster section - shrinks when description expands */}
-            <div 
-              className="relative flex-shrink-0 transition-all duration-300 ease-in-out"
-              style={{ 
-                height: isDescriptionExpanded ? '25%' : '70%',
-                minHeight: isDescriptionExpanded ? '180px' : '525px'
-              }}
-            >
-              <img
-                src={currentMovie.poster_url}
-                alt={currentMovie.title}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = '/placeholder-movie.jpg';
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            </div>
-            
-            {/* Text section - expands when description expands */}
-            <div 
-              className="p-3 sm:p-4 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out"
-              style={{ 
-                height: isDescriptionExpanded ? '75%' : '30%',
-                maxHeight: isDescriptionExpanded ? '565px' : '225px'
-              }}
-            >
-              {/* Scrollable content area */}
-              <div className="flex-1 overflow-y-auto min-h-0">
-                {/* Genres */}
-                <div className="flex flex-wrap gap-1 sm:gap-2 mb-1 sm:mb-3">
-                  {currentMovie.genres.map((genre, index) => (
-                    <span
-                      key={index}
-                      className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-red-600 text-white text-xs rounded-full"
-                    >
-                      {genre}
-                    </span>
-                  ))}
-                </div>
-                
-                {/* Movie Details */}
-                <div className="flex items-center justify-between text-gray-400 text-xs sm:text-sm mb-2 sm:mb-3">
-                  <span className="font-medium">{currentMovie.year}</span>
-                  <span>•</span>
-                  <span className="text-yellow-400 font-medium">⭐ {currentMovie.rating % 1 === 0 ? currentMovie.rating.toFixed(0) : currentMovie.rating.toFixed(1)}/10</span>
-                </div>
-                
-                {/* Title */}
-                <h2 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">{currentMovie.title}</h2>
-                
-                {/* Synopsis - Expandable */}
-                <div className="mb-2 sm:mb-3">
-                  <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
-                    {isDescriptionExpanded 
-                      ? currentMovie.synopsis
-                      : currentMovie.synopsis.length > 80 
-                      ? `${currentMovie.synopsis.substring(0, 80)}...` 
-                      : currentMovie.synopsis}
-                  </p>
-                  {currentMovie.synopsis.length > 80 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsDescriptionExpanded(!isDescriptionExpanded);
-                      }}
-                      className="text-red-400 text-xs mt-1 hover:text-red-300 transition-colors"
-                    >
-                      {isDescriptionExpanded ? 'Show less' : 'Tap to read more'}
-                    </button>
-                  )}
-                </div>
-              </div>
-              
-              {/* OTT Platforms - Always visible at bottom, doesn't scroll */}
-              {currentMovie.ott && currentMovie.ott.length > 0 && (
-                <div className="flex flex-wrap gap-1 sm:gap-2 mt-2 pt-2 border-t border-gray-800 flex-shrink-0">
-                  {currentMovie.ott.map((platform, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-blue-600 text-white text-xs sm:text-sm rounded"
-                    >
-                      {platform}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              {/* Adult Content Warning */}
-              {currentMovie.adult && (
-                <div className="text-red-400 text-xs font-semibold mt-2 flex-shrink-0">
-                  ⚠️ Adult Content
-                </div>
-              )}
-            </div>
+          >
+            {renderCardContent(nextMoviePreview, true)}
           </div>
-        </div>
+        )}
+
+        {/* Current Card with Animations */}
+        <AnimatePresence mode="wait" initial={false}>
+          {currentMovie && (
+          <motion.div
+            key={currentMovieIndex}
+            className="relative w-full max-w-[95%] sm:max-w-[399px] mx-auto touch-auto"
+            style={{
+              height: '100%',
+              maxHeight: '100%',
+              width: '100%',
+              x,
+              rotate,
+              zIndex: 1,
+            }}
+            drag={isExiting ? false : "x"}
+            dragConstraints={{ left: -300, right: 300 }}
+            dragElastic={0.2}
+            whileDrag={{ cursor: 'grabbing' }}
+            onDragStart={() => {
+              setIsDragging(true);
+            }}
+            onDrag={(event, info) => {
+              setSwipeDelta({ x: info.offset.x, y: 0 });
+            }}
+              onDragEnd={(event, info) => {
+                // Prevent multiple swipes during exit animation
+                if (isExiting) {
+                  return;
+                }
+                
+                setIsDragging(false);
+                const threshold = 100;
+                
+                // If drag didn't move much, just reset
+                if (Math.abs(info.offset.x) < 10) {
+                  x.set(0);
+                  setSwipeDelta({ x: 0, y: 0 });
+                  return;
+                }
+                
+                if (info.offset.x > threshold) {
+                  // Swipe right - like
+                  setIsExiting(true);
+                  setPendingSwipe('right');
+                  exitDirectionRef.current = 'right';
+                  // Immediately update movie index to trigger AnimatePresence exit
+                  handleSwipeRight();
+                } else if (info.offset.x < -threshold) {
+                  // Swipe left - skip
+                  setIsExiting(true);
+                  setPendingSwipe('left');
+                  exitDirectionRef.current = 'left';
+                  // Immediately update movie index to trigger AnimatePresence exit
+                  handleSwipeLeft();
+                } else {
+                  // Spring back to center
+                  x.set(0);
+                  setSwipeDelta({ x: 0, y: 0 });
+                }
+              }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ 
+              scale: 1, 
+              y: 0,
+              opacity: 1
+            }}
+            exit={{ 
+              opacity: 0, 
+              scale: 0.8,
+              x: exitDirectionRef.current === 'right' ? 1000 : exitDirectionRef.current === 'left' ? -1000 : 0,
+              rotate: exitDirectionRef.current === 'right' ? 30 : exitDirectionRef.current === 'left' ? -30 : 0,
+              transition: { duration: 0.3, ease: "easeInOut" }
+            }}
+            transition={{ duration: 0.3 }}
+          >
+              {renderCardContent(currentMovie)}
+              
+              {/* LIKE Overlay */}
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                style={{
+                  opacity: likeOpacity,
+                  rotate,
+                }}
+              >
+                <div
+                  className="text-6xl sm:text-7xl font-bold border-4 border-green-500 text-green-500 px-8 py-4 rounded-2xl"
+                  style={{
+                    textShadow: '0 0 20px rgba(34, 197, 94, 0.5)',
+                    WebkitTextStroke: '2px rgba(34, 197, 94, 0.8)',
+                  }}
+                >
+                  LIKE
+                </div>
+              </motion.div>
+
+              {/* NOPE Overlay */}
+              <motion.div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                style={{
+                  opacity: nopeOpacity,
+                  rotate,
+                }}
+              >
+                <div
+                  className="text-6xl sm:text-7xl font-bold border-4 border-red-500 text-red-500 px-8 py-4 rounded-2xl"
+                  style={{
+                    textShadow: '0 0 20px rgba(239, 68, 68, 0.5)',
+                    WebkitTextStroke: '2px rgba(239, 68, 68, 0.8)',
+                  }}
+                >
+                  NOPE
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-center gap-6 p-6">
-        <button
-          onClick={handleSwipeLeft}
-          className="w-16 h-16 bg-gray-600 text-white rounded-full flex items-center justify-center hover:bg-gray-500 transition-all"
-        >
-          ✕
-        </button>
-        <button
-          onClick={handleSwipeRight}
-          className="w-16 h-16 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-all"
-        >
-          ❤️
-        </button>
-      </div>
 
-      {/* Nudge Modal */}
+      {/* Nudge Modal - Dark cinematic theme */}
       {showNudgeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              You found 3 mutual matches! 🎉
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-3xl p-6 sm:p-8 max-w-md w-full text-center shadow-[0_20px_60px_rgba(0,0,0,0.8)]">
+            <h2 className="text-2xl sm:text-3xl font-light text-white mb-3" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
+              Certified vibe check: solid picks all around.
             </h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-400 mb-6 text-sm sm:text-base italic">
               What would you like to do?
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleNudgeAction('continue')}
-                className="flex-1 bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-full hover:bg-gray-400 transition-all"
+                className="flex-1 border border-gray-700 text-gray-400 font-light py-3 px-4 rounded-full hover:border-gray-600 hover:text-white transition-all duration-300"
               >
                 Keep Browsing
               </button>
               <button
                 onClick={() => handleNudgeAction('shortlist')}
-                className="flex-1 bg-red-600 text-white font-bold py-3 px-4 rounded-full hover:bg-red-700 transition-all"
+                className="flex-1 border border-red-500/60 text-red-400 font-light py-3 px-4 rounded-full hover:bg-red-500 hover:border-red-500 hover:text-white transition-all duration-300"
               >
                 Shortlist Now
               </button>

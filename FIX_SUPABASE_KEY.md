@@ -45,3 +45,12 @@ If you want more permissions, you can use the **service_role** key instead:
 
 The script will automatically use the service_role key if available.
 
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,50 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="prefGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#991b1b;stop-opacity:1" />
+    </linearGradient>
+    <filter id="prefShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="2" dy="3" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Settings/Preferences icon - 3D style -->
+  <circle cx="40" cy="40" r="28" fill="url(#prefGradient)" filter="url(#prefShadow)"/>
+  <circle cx="40" cy="40" r="28" fill="none" stroke="#7f1d1d" stroke-width="1"/>
+  
+  <!-- 3D highlight -->
+  <circle cx="40" cy="40" r="28" fill="none" stroke="#ff4444" stroke-width="1" opacity="0.3"/>
+  
+  <!-- Gear teeth -->
+  <g transform="translate(40,40)">
+    <rect x="-2" y="-30" width="4" height="8" rx="1" fill="#fff" opacity="0.9"/>
+    <rect x="-2" y="22" width="4" height="8" rx="1" fill="#fff" opacity="0.9"/>
+    <rect x="-30" y="-2" width="8" height="4" rx="1" fill="#fff" opacity="0.9"/>
+    <rect x="22" y="-2" width="8" height="4" rx="1" fill="#fff" opacity="0.9"/>
+    <rect x="-21" y="-21" width="4" height="6" rx="1" fill="#fff" opacity="0.9" transform="rotate(45)"/>
+    <rect x="17" y="17" width="4" height="6" rx="1" fill="#fff" opacity="0.9" transform="rotate(45)"/>
+    <rect x="21" y="-17" width="4" height="6" rx="1" fill="#fff" opacity="0.9" transform="rotate(-45)"/>
+    <rect x="-17" y="21" width="4" height="6" rx="1" fill="#fff" opacity="0.9" transform="rotate(-45)"/>
+  </g>
+  
+  <!-- Center circle -->
+  <circle cx="40" cy="40" r="12" fill="#991b1b"/>
+  <circle cx="40" cy="40" r="10" fill="#dc2626"/>
+</svg>
+
+
+
+
+
+
+
+

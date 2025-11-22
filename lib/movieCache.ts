@@ -342,6 +342,9 @@ export function getCachedMovies(preferences: {
   adultContent: boolean;
   releaseYear?: number | '2025' | '2000s' | 'older' | null;
   highRatedOnly?: boolean;
+  releaseAfterMonths?: number | null;
+  moodIncludeGenres?: Genre[];
+  moodExcludeGenres?: Genre[];
 }): Movie[] {
   const cacheKey = JSON.stringify(preferences);
   
@@ -368,6 +371,18 @@ export function getCachedMovies(preferences: {
       preferences.genres.every((selected) => movie.genres.includes(selected))
     );
   }
+
+  if (preferences.moodIncludeGenres && preferences.moodIncludeGenres.length > 0) {
+    movies = movies.filter(movie =>
+      preferences.moodIncludeGenres!.some((genre) => movie.genres.includes(genre))
+    );
+  }
+
+  if (preferences.moodExcludeGenres && preferences.moodExcludeGenres.length > 0) {
+    movies = movies.filter(movie =>
+      !preferences.moodExcludeGenres!.some((genre) => movie.genres.includes(genre))
+    );
+  }
   // High rated filter - strict: rating must exist and be >= 8.0
   if (preferences.highRatedOnly) {
     movies = movies.filter(movie => movie.rating && movie.rating >= 8.0);
@@ -383,6 +398,13 @@ export function getCachedMovies(preferences: {
   };
   if (preferences.releaseYear !== undefined && preferences.releaseYear !== null) {
     movies = movies.filter(movie => matchesRelease(movie.year, preferences.releaseYear));
+  }
+
+  if (preferences.releaseAfterMonths && preferences.releaseAfterMonths > 0) {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - preferences.releaseAfterMonths);
+    const cutoffYear = cutoff.getFullYear();
+    movies = movies.filter(movie => movie.year >= cutoffYear);
   }
   
   // Apply date filtering

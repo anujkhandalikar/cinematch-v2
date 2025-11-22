@@ -70,3 +70,12 @@ After adding the environment variables:
 - **Project Settings:** https://vercel.com/anujs-projects-7e529fb9/cinematch-copy/settings
 - **Environment Variables:** https://vercel.com/anujs-projects-7e529fb9/cinematch-copy/settings/environment-variables
 
+
+
+
+
+
+
+
+
+

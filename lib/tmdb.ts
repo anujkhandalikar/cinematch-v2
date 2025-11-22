@@ -685,6 +685,45 @@ export async function fetchPopularMovies(page: number = 1, languages: string[] =
   }
 }
 
+// Fetch top-rated movies (critically acclaimed)
+export async function fetchTopRatedMovies(pages: number = 5, languages: string[] = ['en-US']): Promise<any[]> {
+  try {
+    const collected: any[] = [];
+
+    for (const language of languages) {
+      for (let page = 1; page <= pages; page++) {
+        const endpoint = encodeURIComponent(`/movie/top_rated?page=${page}&language=${language}`);
+        const url = `${API_BASE_URL}?endpoint=${endpoint}`;
+
+        try {
+          const response = await fetchWithTimeout(url, 15000);
+          if (!response.ok) {
+            console.warn(`Top rated page ${page} failed for language ${language}: ${response.status}`);
+            continue;
+          }
+
+          const data = await response.json();
+          const results = data.results || [];
+          collected.push(...results);
+        } catch (error) {
+          console.warn(`Top rated fetch error for language ${language} page ${page}:`, error);
+        }
+      }
+    }
+
+    if (collected.length === 0) {
+      console.warn('Top rated fetch returned no movies');
+      return [];
+    }
+
+    const unique = collected.filter((movie, index, self) => index === self.findIndex((m) => m.id === movie.id));
+    return unique.map(convertTMDBMovie);
+  } catch (error) {
+    console.error('Error fetching top rated movies:', error);
+    return [];
+  }
+}
+
 // Fetch movies by genre
 export async function fetchMoviesByGenre(genreId: number, page: number = 1): Promise<any[]> {
   try {

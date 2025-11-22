@@ -59,3 +59,12 @@ After the script completes:
 2. Click on `imdb_top250_movies` table
 3. You should see ~250 rows!
 
+
+
+
+
+
+
+
+
+

@@ -95,13 +95,32 @@ export async function streamLanguageAll(
   } catch {}
 
   async function fetchPage(page: number): Promise<TMDBResponse<TMDBMovie>> {
+    // Validate langCode
+    if (!langCode || langCode.trim() === '') {
+      console.error('❌ streamLanguageAll: langCode is empty or invalid:', langCode);
+      return { page, results: [], total_pages: page, total_results: 0 } as any;
+    }
+    
     // Add origin-country/region hints for Indian languages to improve recall
     const originCountry = ['hi','ta','te','ml','bn'].includes(langCode) ? 'IN' : '';
     const regionParam = originCountry ? `&with_origin_country=${originCountry}&region=${originCountry}` : '';
     const endpoint = encodeURIComponent(`/discover/movie?page=${page}&with_original_language=${langCode}${regionParam}&language=en-US&sort_by=popularity.desc&include_adult=${opts.adult ? 'true' : 'false'}`);
-    const res = await fetch(`/api/movies?endpoint=${endpoint}`);
-    if (!res.ok) return { page, results: [], total_pages: page, total_results: 0 } as any;
-    return res.json();
+    
+    console.log(`🌐 Fetching page ${page} for language ${langCode}:`, decodeURIComponent(endpoint));
+    
+    try {
+      const res = await fetch(`/api/movies?endpoint=${endpoint}`);
+      if (!res.ok) {
+        console.error(`❌ API error for page ${page}, language ${langCode}:`, res.status, res.statusText);
+        const errorText = await res.text().catch(() => '');
+        console.error('   Error details:', errorText);
+        return { page, results: [], total_pages: page, total_results: 0 } as any;
+      }
+      return res.json();
+    } catch (error) {
+      console.error(`❌ Network error fetching page ${page} for language ${langCode}:`, error);
+      return { page, results: [], total_pages: page, total_results: 0 } as any;
+    }
   }
 
   const first = await Promise.all([1,2,3,4,5,6].map(p => fetchPage(p)));

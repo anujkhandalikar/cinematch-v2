@@ -1,310 +1,655 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useStore, Genre, OTTPlatform, Language } from '@/lib/store';
+import { useEffect, useState, useRef } from 'react';
+import { useStore, Genre, OTTPlatform, Language, UserPreferences, MoodPreset } from '@/lib/store';
+import { trackEvent } from '@/lib/tracking';
 
 const GENRES: Genre[] = [
-  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
-  'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 'Mystery', 
+  'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary',
+  'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 'Mystery',
   'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western'
 ];
 
 const OTT_PLATFORMS: OTTPlatform[] = [
-  'Netflix', 'Prime Video', 'Disney+', 'HBO Max', 'Hulu', 
+  'Netflix', 'Prime Video', 'Disney+', 'HBO Max', 'Hulu',
   'Apple TV+', 'Paramount+', 'Peacock'
 ];
 
-// Language filters removed
+interface MoodCard {
+  key: MoodPreset;
+  title: string;
+  subtitle: string;
+  image: string;
+  gradient: string;
+}
+
+const MOOD_CARDS: MoodCard[] = [
+  {
+    key: 'Bollywood',
+    title: 'Bollywood',
+    subtitle: 'Hindi crowd-pleasers from 2000 through today.',
+    image: '/saiyara.jpeg',
+    gradient: 'linear-gradient(200deg, rgba(240, 98, 146, 0.82) 0%, rgba(74, 20, 140, 0.8) 55%, rgba(10,10,10,0.95) 100%)'
+  },
+  {
+    key: 'LightFun',
+    title: 'Something Light & Fun',
+    subtitle: 'Feel-good stories, laughter, and comfort.',
+    image: '/rat.jpg',
+    gradient: 'linear-gradient(200deg, rgba(255,170,180,0.85) 0%, rgba(30,30,30,0.75) 55%, rgba(10,10,10,0.95) 100%)'
+  },
+  {
+    key: 'NewPopular',
+    title: 'New & Popular',
+    subtitle: 'Fresh releases buzzing with energy right now.',
+    image: '/demonslayer.jpg',
+    gradient: 'linear-gradient(200deg, rgba(255,90,50,0.78) 0%, rgba(130,20,10,0.85) 45%, rgba(10,10,10,0.95) 100%)'
+  },
+  {
+    key: 'CriticallyAcclaimed',
+    title: 'Critically Acclaimed',
+    subtitle: 'Award-winning cinema with prestige and polish.',
+    image: '/dark%20knight.jpg',
+    gradient: 'linear-gradient(200deg, rgba(10,12,26,0.85) 0%, rgba(5,5,10,0.88) 60%, rgba(0,0,0,0.96) 100%)'
+  }
+];
+
+const getMoodFilters = (mood: MoodPreset): Partial<UserPreferences> => {
+  const base: Partial<UserPreferences> = {
+    genres: [],
+    ottPlatforms: [],
+    languages: [],
+    adultContent: false,
+    releaseYear: null,
+    highRatedOnly: false,
+    imdbTop250Movies: false,
+    releaseAfterMonths: null,
+    moodIncludeGenres: [],
+    moodExcludeGenres: [],
+    moodPreset: mood,
+  };
+
+  switch (mood) {
+    case 'LightFun':
+      return {
+        ...base,
+        moodIncludeGenres: ['Comedy', 'Romance', 'Drama', 'Family', 'Animation'],
+        moodExcludeGenres: ['Horror', 'Thriller', 'War', 'Crime'],
+      };
+    case 'CriticallyAcclaimed':
+      return {
+        ...base,
+        imdbTop250Movies: true,
+      };
+    case 'NewPopular': {
+      return {
+        ...base,
+        moodIncludeGenres: ['Action', 'Comedy', 'Drama', 'Thriller', 'Romance'],
+        releaseAfterMonths: 24,
+      };
+    }
+    case 'Bollywood':
+      return {
+        ...base,
+        languages: ['Hindi'],
+        releaseYear: 2000,
+      };
+    default:
+      return base;
+  }
+};
 
 export default function PreferencesScreen() {
   const preferences = useStore((state) => state.preferences);
   const setPreferences = useStore((state) => state.setPreferences);
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
-  
+
   const [selectedGenres, setSelectedGenres] = useState<Genre[]>(preferences.genres);
   const [selectedPlatforms, setSelectedPlatforms] = useState<OTTPlatform[]>(preferences.ottPlatforms);
   const [adultContent, setAdultContent] = useState(preferences.adultContent);
   const [highRatedOnly, setHighRatedOnly] = useState(preferences.highRatedOnly || false);
   const [selectedLanguages, setSelectedLanguages] = useState<Language[]>(preferences.languages || []);
-  const [releaseYear, setReleaseYear] = useState<'2025' | '2000s' | 'older' | null>(preferences.releaseYear);
-  const [imdbTop250Movies, setImdbTop250Movies] = useState(preferences.imdbTop250Movies || false);
-  
-  // When IMDb Top 250 Movies is enabled, disable other filters
-  const filtersDisabled = imdbTop250Movies;
-  
-  // When any other filter is selected, disable and turn off IMDb filter
-  const hasOtherFilters = selectedGenres.length > 0 || 
-                          selectedPlatforms.length > 0 || 
-                          selectedLanguages.length > 0 || 
-                          releaseYear !== null || 
-                          highRatedOnly || 
-                          adultContent;
-  
-  // If other filters are selected, turn off IMDb filter
+  const [releaseYear, setReleaseYear] = useState<UserPreferences['releaseYear']>(preferences.releaseYear);
+  const initialImdbTop250 = preferences.moodPreset ? preferences.imdbTop250Movies || false : false;
+  const [imdbTop250Movies, setImdbTop250Movies] = useState(initialImdbTop250);
+
+  const totalMoodCards = MOOD_CARDS.length;
+  const initialMoodIndex = (() => {
+    if (!preferences.moodPreset) return 0;
+    const index = MOOD_CARDS.findIndex((card) => card.key === preferences.moodPreset);
+    return index >= 0 ? index : 0;
+  })();
+
+  const [selectedMood, setSelectedMood] = useState<MoodPreset | null>(preferences.moodPreset ?? null);
+  const [activeMoodIndex, setActiveMoodIndex] = useState(initialMoodIndex);
+  const carouselRef = useRef<HTMLDivElement | null>(null);
+  const [isFineTuneOpen, setIsFineTuneOpen] = useState(false);
+  const [hasManualAdjustments, setHasManualAdjustments] = useState(false);
+  const [cardsBlurred, setCardsBlurred] = useState(false);
+  const [filtersBlurred, setFiltersBlurred] = useState(true);
+  const filtersRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    if (hasOtherFilters && imdbTop250Movies) {
+    trackEvent({ event: 'Preferences_Page_Visited' });
+  }, []);
+
+  useEffect(() => {
+    if (preferences.moodPreset) {
+      setCardsBlurred(false);
+      setFiltersBlurred(true);
+    }
+  }, [preferences.moodPreset]);
+
+  const resetManualFilters = () => {
+    setSelectedGenres([]);
+    setSelectedPlatforms([]);
+    setSelectedLanguages([]);
+    setReleaseYear(null);
+    setHighRatedOnly(false);
+    setAdultContent(false);
+    setImdbTop250Movies(false);
+  };
+
+  const handleMoodSelect = (mood: MoodPreset) => {
+    const targetIndex = MOOD_CARDS.findIndex((card) => card.key === mood);
+    const normalizedIndex = targetIndex >= 0 ? targetIndex : 0;
+    setActiveMoodIndex(normalizedIndex);
+    setSelectedMood(mood);
+    setCardsBlurred(false);
+    setFiltersBlurred(true);
+    setHasManualAdjustments(false);
+    setIsFineTuneOpen(false);
+    setSelectedGenres([]);
+    setSelectedPlatforms([]);
+    setSelectedLanguages([]);
+    setReleaseYear(null);
+    setHighRatedOnly(false);
+    setAdultContent(false);
+    setImdbTop250Movies(false);
+    trackEvent({
+      event: 'Mood_Selected',
+      category: 'mood',
+      option: mood,
+    });
+  };
+
+  const engageManualFilters = () => {
+    setIsFineTuneOpen(true);
+    setHasManualAdjustments(true);
+    setSelectedMood(null);
+    setCardsBlurred(true);
+    setFiltersBlurred(false);
+  };
+
+  const handleFineTuneToggle = () => {
+    setIsFineTuneOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        setSelectedMood(null);
+        setHasManualAdjustments(true);
+        setCardsBlurred(true);
+        setFiltersBlurred(false);
+        requestAnimationFrame(() => {
+          filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      } else {
+        if (!selectedMood) {
+          setSelectedMood(MOOD_CARDS[activeMoodIndex].key);
+        }
+        setCardsBlurred(false);
+        setFiltersBlurred(true);
+        requestAnimationFrame(() => {
+          const scrollContainer = carouselRef.current;
+          if (scrollContainer) {
+            const cards = scrollContainer.querySelectorAll<HTMLButtonElement>('[data-mood-card]');
+            const targetCard = cards[activeMoodIndex]?.parentElement as HTMLElement | undefined;
+            targetCard?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }
+        });
+      }
+      return next;
+    });
+  };
+
+  const cardWidthClass = 'w-[65vw] sm:w-[45vw] md:w-[35vw] max-w-[300px]';
+  const peekGapClass = 'px-[18vw] sm:px-[12vw] md:px-[10vw]';
+
+  const activeMood = MOOD_CARDS[activeMoodIndex];
+  const selectedMoodCard = selectedMood ? MOOD_CARDS.find((card) => card.key === selectedMood) ?? null : null;
+  const canContinue = Boolean(selectedMood || hasManualAdjustments);
+  const handleGenreToggle = (genre: Genre) => {
+    engageManualFilters();
+    if (imdbTop250Movies) {
       setImdbTop250Movies(false);
     }
-  }, [hasOtherFilters, imdbTop250Movies]);
-
-  const handleGenreToggle = (genre: Genre) => {
-    setSelectedGenres(prev => 
-      prev.includes(genre) 
-        ? prev.filter(g => g !== genre)
-        : [...prev, genre]
+    trackEvent({
+      event: 'Preference_Selected',
+      category: 'genre',
+      option: genre,
+    });
+    setSelectedGenres((prev) =>
+      prev.includes(genre)
+        ? prev.filter((g) => g !== genre)
+        : [...prev, genre],
     );
   };
 
   const handlePlatformToggle = (platform: OTTPlatform) => {
-    setSelectedPlatforms(prev => 
-      prev.includes(platform) 
-        ? prev.filter(p => p !== platform)
-        : [...prev, platform]
+    engageManualFilters();
+    if (imdbTop250Movies) {
+      setImdbTop250Movies(false);
+    }
+    trackEvent({
+      event: 'Preference_Selected',
+      category: 'platform',
+      option: platform,
+    });
+    setSelectedPlatforms((prev) =>
+      prev.includes(platform)
+        ? prev.filter((p) => p !== platform)
+        : [...prev, platform],
     );
   };
 
-  // No-op: languages removed
-
   const handleContinue = () => {
-    // When IMDb Top 250 Movies is enabled, ignore other filters
-    const newPreferences = {
-      genres: imdbTop250Movies ? [] : selectedGenres,
-      ottPlatforms: imdbTop250Movies ? [] : selectedPlatforms,
-      languages: imdbTop250Movies ? [] : selectedLanguages,
-      adultContent: imdbTop250Movies ? false : adultContent,
-      releaseYear: imdbTop250Movies ? null : releaseYear,
-      highRatedOnly: imdbTop250Movies ? false : highRatedOnly,
-      imdbTop250Movies
-    };
-    console.log('=== SAVING PREFERENCES ===');
-    console.log('Selected release year:', releaseYear);
-    console.log('Full preferences being saved:', newPreferences);
-    setPreferences(newPreferences);
-    const mode = (useStore.getState() as any).selectedMode;
-    if (mode === 'single') {
+    let finalPreferences: UserPreferences;
+
+    if (selectedMood) {
+      const moodFilters = getMoodFilters(selectedMood);
+      const base: UserPreferences = {
+        genres: [],
+        ottPlatforms: [],
+        languages: [],
+        adultContent: false,
+        releaseYear: null,
+        highRatedOnly: false,
+        imdbTop250Movies: false,
+        releaseAfterMonths: null,
+        moodPreset: null,
+        moodIncludeGenres: [],
+        moodExcludeGenres: [],
+      };
+
+      finalPreferences = {
+        ...base,
+        ...moodFilters,
+      } as UserPreferences;
+      console.log('=== SAVING MOOD PREFERENCES ===');
+      console.log('Selected mood:', selectedMood);
+      console.log('Final mood preferences:', finalPreferences);
+    } else {
+      finalPreferences = {
+        genres: selectedGenres,
+        ottPlatforms: selectedPlatforms,
+        languages: selectedLanguages,
+        adultContent,
+        releaseYear,
+        highRatedOnly,
+        imdbTop250Movies: false,
+        releaseAfterMonths: null,
+        moodPreset: null,
+        moodIncludeGenres: [],
+        moodExcludeGenres: [],
+      };
+      console.log('=== SAVING MANUAL PREFERENCES ===');
+      console.log('Full preferences being saved:', finalPreferences);
+    }
+
+    setPreferences(finalPreferences);
+    const { selectedMode } = useStore.getState();
+    if (selectedMode === 'single') {
       setCurrentScreen('swipe');
-    } else if (mode === 'dual') {
+    } else if (selectedMode === 'dual') {
       setCurrentScreen('session');
     } else {
       setCurrentScreen('mode');
     }
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const activeTag = activeElement?.tagName.toLowerCase();
+
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select' || activeElement?.hasAttribute('contenteditable')) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        handleContinue();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleContinue]);
+
+
   return (
     <>
-      {/* Scrollable content */}
-      <div className="min-h-screen bg-black pb-32">
-        <div className="max-w-4xl mx-auto p-4 sm:p-6">
-          {/* Header */}
-          <div className="text-center mb-8 pt-8">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
-              Your Preferences
+      <div className="relative min-h-screen bg-[#050505] pb-28">
+        <div
+          className="fixed inset-0 pointer-events-none z-0"
+          style={{
+            background: 'radial-gradient(circle at 50% 0%, rgba(229, 9, 20, 0.08) 0%, rgba(0,0,0,0.85) 55%, rgba(0,0,0,1) 100%)',
+          }}
+        />
+
+        <div className="relative z-10 mx-auto max-w-4xl p-4 sm:p-6">
+          <button
+            onClick={() => setCurrentScreen('mode')}
+            className="mb-6 text-gray-400 hover:text-red-400 transition-colors text-sm font-light"
+          >
+            ← Back
+          </button>
+
+          <header className="pt-2 mb-10 text-center sm:mb-12">
+            <h1 className="mb-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-5xl" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
+              So, whats your mood like?
             </h1>
-            <p className="text-red-200 text-sm sm:text-base">
-              Help us find movies you'll love
+            <p className="text-base font-light italic text-white/70 md:text-lg">
+              Pick a mood — we’ll find the perfect movie for it.
             </p>
-          </div>
+          </header>
 
-          {/* IMDb Top 250 Filter - Moved to top */}
-          <div className="mb-8">
-            <div className={`flex items-center justify-between p-4 rounded-lg ${
-              hasOtherFilters ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
-            }`}>
-              <div>
-                <h3 className={`text-lg font-semibold ${hasOtherFilters ? 'text-gray-500' : 'text-white'}`}>
-                  IMDb Top 250 Movies
-                </h3>
-                <p className={`text-sm ${hasOtherFilters ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Show only IMDb Top 250 movies
-                </p>
-              </div>
-              <button
-                onClick={() => !hasOtherFilters && setImdbTop250Movies(!imdbTop250Movies)}
-                disabled={hasOtherFilters}
-                className={`w-12 h-6 rounded-full transition-all ${
-                  hasOtherFilters 
-                    ? 'bg-gray-700 cursor-not-allowed' 
-                    : imdbTop250Movies 
-                    ? 'bg-red-600' 
-                    : 'bg-gray-600'
-                }`}
+          <section
+            className={`relative transition-all duration-500 ${
+              cardsBlurred ? 'scale-[0.98] blur-[1.5px]' : 'scale-100 blur-0'
+            }`}
+          >
+            <div className="-mx-4 sm:-mx-6">
+              <div
+                ref={carouselRef}
+                className={`flex snap-x snap-mandatory gap-3 overflow-x-auto pb-6 px-4 sm:px-6 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:gap-5 md:gap-6 ${peekGapClass}`}
+                style={{ scrollPaddingInline: 'clamp(8vw, 15vw, 18vw)' }}
               >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  imdbTop250Movies ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
-            </div>
-          </div>
-
-          {/* High Rated Only Toggle */}
-          <div className="mb-8">
-            <div className={`flex items-center justify-between p-4 rounded-lg ${
-              filtersDisabled ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
-            }`}>
-              <div>
-                <h3 className={`text-lg font-semibold ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-                  Show only 8+ Rated
-                </h3>
-                <p className={`text-sm ${filtersDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Surface only highly rated movies (≥ 8.0)
-                </p>
+                {MOOD_CARDS.map((card, index) => {
+                  const isCentered = index === activeMoodIndex;
+                  const isSelected = selectedMood === card.key;
+                  return (
+                    <button
+                      key={card.key}
+                      type="button"
+                      onClick={() => handleMoodSelect(card.key)}
+                      aria-pressed={selectedMood === card.key}
+                      className={`group relative flex snap-center flex-col overflow-visible rounded-3xl p-3 transition-transform duration-500 ease-in-out active:scale-[0.99] md:p-4 ${
+                        isCentered ? 'scale-100 opacity-100' : 'scale-[0.88] opacity-60'
+                      }`}
+                      style={{ scrollSnapAlign: 'center' }}
+                    >
+                      <div
+                        data-mood-card
+                        className={`relative flex aspect-[3/4] min-w-[220px] flex-col justify-end overflow-visible rounded-2xl border transition-all duration-500 ease-in-out ${cardWidthClass} ${
+                          isSelected
+                            ? 'border-red-600/80 shadow-[0_0_12px_rgba(255,0,0,0.55)]'
+                            : 'border-white/10 hover:border-white/20 hover:shadow-[0_0_14px_rgba(255,0,0,0.2)]'
+                        }`}
+                      >
+                        <img
+                          src={card.image}
+                          alt={`${card.title} artwork`}
+                          className="absolute inset-0 h-full w-full rounded-2xl object-cover"
+                        />
+                        <div
+                          className="absolute inset-0 rounded-2xl opacity-90"
+                          style={{ background: card.gradient }}
+                        />
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-t from-black/85 via-black/20 to-black/60" />
+                        <div className="relative z-10 flex h-full w-full flex-col justify-end rounded-2xl p-6 text-left sm:p-7 md:p-8">
+                          <h3 className="mb-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                            {card.title}
+                          </h3>
+                          <p className="text-sm text-gray-200/90 sm:text-base">
+                            {card.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <button
-                onClick={() => !filtersDisabled && setHighRatedOnly(!highRatedOnly)}
-                disabled={filtersDisabled}
-                className={`w-12 h-6 rounded-full transition-all ${
-                  filtersDisabled ? 'bg-gray-700 cursor-not-allowed' : highRatedOnly ? 'bg-red-600' : 'bg-gray-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  highRatedOnly ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
             </div>
-          </div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-t from-black via-black/60 to-transparent" />
+          </section>
 
-
-          {/* OTT Platforms Section */}
-          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-              Streaming Platforms
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {OTT_PLATFORMS.map((platform) => (
-                <button
-                  key={platform}
-                  onClick={() => !filtersDisabled && handlePlatformToggle(platform)}
-                  disabled={filtersDisabled}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    filtersDisabled
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : selectedPlatforms.includes(platform)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {platform}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Language Section */}
-          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-              Language
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {(['English','Hindi','Tamil','Telugu','Malayalam','Bengali'] as Language[]).map((language) => (
-                <button
-                  key={language}
-                  onClick={() => !filtersDisabled && setSelectedLanguages(prev => prev.includes(language) ? prev.filter(l => l !== language) : [...prev, language])}
-                  disabled={filtersDisabled}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    filtersDisabled
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : selectedLanguages.includes(language)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {language}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Genres Section */}
-          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-              Favorite Genres
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {GENRES.map((genre) => (
-                <button
-                  key={genre}
-                  onClick={() => !filtersDisabled && handleGenreToggle(genre)}
-                  disabled={filtersDisabled}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    filtersDisabled
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : selectedGenres.includes(genre)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {genre}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Release Year Section */}
-          <div className={`mb-8 ${filtersDisabled ? 'opacity-50' : ''}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-              Release Year
-            </h2>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { value: '2025', label: '2025' },
-                { value: '2000s', label: '2000s' },
-                { value: 'older', label: 'Older' }
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => !filtersDisabled && setReleaseYear(releaseYear === value ? null : value as '2025' | '2000s' | 'older')}
-                  disabled={filtersDisabled}
-                  className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                    filtersDisabled
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : releaseYear === value
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Adult Content Toggle */}
-          <div className="mb-8">
-            <div className={`flex items-center justify-between p-4 rounded-lg ${
-              filtersDisabled ? 'bg-gray-800 opacity-50' : 'bg-gray-900'
-            }`}>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleFineTuneToggle}
+              className={`group flex w-full items-center justify-between rounded-2xl px-5 py-4 text-left transition ${
+                isFineTuneOpen
+                  ? 'border border-red-600/70 bg-red-600/10 shadow-[0_0_12px_rgba(255,0,0,0.35)]'
+                  : 'border border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]'
+              }`}
+            >
               <div>
-                <h3 className={`text-lg font-semibold ${filtersDisabled ? 'text-gray-500' : 'text-white'}`}>
-                  Include Adult Content
-                </h3>
-                <p className={`text-sm ${filtersDisabled ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Show R-rated movies and mature content
-                </p>
+                <p className="text-sm font-semibold text-white">Fine-tune manually</p>
+                <p className="text-xs text-white/50">Adjust rating, platform, or language.</p>
               </div>
-              <button
-                onClick={() => !filtersDisabled && setAdultContent(!adultContent)}
-                disabled={filtersDisabled}
-                className={`w-12 h-6 rounded-full transition-all ${
-                  filtersDisabled ? 'bg-gray-700 cursor-not-allowed' : adultContent ? 'bg-red-600' : 'bg-gray-600'
-                }`}
-              >
-                <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  adultContent ? 'translate-x-6' : 'translate-x-0.5'
-                }`} />
-              </button>
+              <span className={`text-sm text-white/60 transition-transform ${isFineTuneOpen ? 'rotate-180' : ''}`}>
+                ⌄
+              </span>
+            </button>
+
+            <div
+              ref={filtersRef}
+              className={`transform transition-all duration-500 ease-out ${
+                isFineTuneOpen
+                  ? 'pointer-events-auto mt-6 max-h-[4000px] opacity-100 translate-y-0'
+                  : 'pointer-events-none max-h-0 opacity-0 -translate-y-4'
+              }`}
+            >
+              <div className="space-y-6 rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_45px_-25px_rgba(0,0,0,0.6)] backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-light text-white">Show only 8+ Rated</h3>
+                    <p className="text-sm text-white/50">Surface only highly rated movies (≥ 8.0)</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      engageManualFilters();
+                      const newValue = !highRatedOnly;
+                      trackEvent({
+                        event: 'Preference_Selected',
+                        category: 'highRatedOnly',
+                        option: newValue ? 'enabled' : 'disabled',
+                      });
+                      setHighRatedOnly(newValue);
+                    }}
+                    className={`w-16 h-8 rounded-full transition-all duration-300 flex items-center px-1 ${
+                      highRatedOnly
+                        ? 'bg-red-600 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                        : 'bg-gray-700'
+                    }`}
+                  >
+                    <span
+                      className={`h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                        highRatedOnly ? 'translate-x-7' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] transition">
+                  <h3 className="text-xl font-light text-white mb-4">Streaming Platforms</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {OTT_PLATFORMS.map((platform) => (
+                      <button
+                        key={platform}
+                        onClick={() => handlePlatformToggle(platform)}
+                        className={`px-4 py-3 rounded-full text-sm font-light transition-all duration-300 ${
+                          selectedPlatforms.includes(platform)
+                            ? 'bg-red-600 text-white border border-red-500 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                            : 'bg-[#111111] border border-[#1a1a1a] text-gray-400 hover:border-red-500/50 hover:text-white'
+                        }`}
+                      >
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] transition">
+                  <h3 className="text-xl font-light text-white mb-4">Language</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {(['English', 'Hindi', 'Tamil', 'Telugu', 'Malayalam', 'Bengali'] as Language[]).map((language) => (
+                      <button
+                        key={language}
+                        onClick={() => {
+                          engageManualFilters();
+                          if (imdbTop250Movies) {
+                            setImdbTop250Movies(false);
+                          }
+                          setSelectedLanguages((prev) =>
+                            prev.includes(language)
+                              ? prev.filter((l) => l !== language)
+                              : [...prev, language],
+                          );
+                        }}
+                        className={`px-4 py-3 rounded-full text-sm font-light transition-all duration-300 ${
+                          selectedLanguages.includes(language)
+                            ? 'bg-red-600 text-white border border-red-500 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                            : 'bg-[#111111] border border-[#1a1a1a] text-gray-400 hover:border-red-500/50 hover:text-white'
+                        }`}
+                      >
+                        {language}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] transition">
+                  <h3 className="text-xl font-light text-white mb-4">Favorite Genres</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {GENRES.map((genre) => (
+                      <button
+                        key={genre}
+                        onClick={() => handleGenreToggle(genre)}
+                        className={`px-4 py-3 rounded-full text-sm font-light transition-all duration-300 ${
+                          selectedGenres.includes(genre)
+                            ? 'bg-red-600 text-white border border-red-500 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                            : 'bg-[#111111] border border-[#1a1a1a] text-gray-400 hover:border-red-500/50 hover:text-white'
+                        }`}
+                      >
+                        {genre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] transition">
+                  <h3 className="text-xl font-light text-white mb-4">Release Year</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { value: '2025' as const, label: '2025' },
+                      { value: '2000s' as const, label: '2000s' },
+                      { value: 'older' as const, label: 'Older' },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          engageManualFilters();
+                          if (imdbTop250Movies) {
+                            setImdbTop250Movies(false);
+                          }
+                          const newValue = releaseYear === value ? null : value;
+                          trackEvent({
+                            event: 'Preference_Selected',
+                            category: 'releaseYear',
+                            option: newValue ?? 'none',
+                          });
+                          setReleaseYear(newValue);
+                        }}
+                        className={`px-4 py-3 rounded-full text-sm font-light transition-all duration-300 ${
+                          releaseYear === value
+                            ? 'bg-red-600 text-white border border-red-500 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                            : 'bg-[#111111] border border-[#1a1a1a] text-gray-400 hover:border-red-500/50 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        engageManualFilters();
+                        if (imdbTop250Movies) {
+                          setImdbTop250Movies(false);
+                        }
+                        const recentThreshold = new Date().getFullYear() - 2;
+                        const newValue = typeof releaseYear === 'number' ? null : recentThreshold;
+                        trackEvent({
+                          event: 'Preference_Selected',
+                          category: 'releaseYear',
+                          option: newValue ? `after_${newValue}` : 'none',
+                        });
+                        setReleaseYear(newValue);
+                      }}
+                      className={`px-4 py-3 rounded-full text-sm font-light transition-all duration-300 ${
+                        typeof releaseYear === 'number'
+                          ? 'bg-red-600 text-white border border-red-500 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                          : 'bg-[#111111] border border-[#1a1a1a] text-gray-400 hover:border-red-500/50 hover:text-white'
+                      }`}
+                    >
+                      Recent (2 yrs)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-light text-white">Include Adult Content</h3>
+                      <p className="text-sm text-gray-500">Show R-rated movies and mature content</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        engageManualFilters();
+                        const newValue = !adultContent;
+                        trackEvent({
+                          event: 'Preference_Selected',
+                          category: 'adultContent',
+                          option: newValue ? 'enabled' : 'disabled',
+                        });
+                        setAdultContent(newValue);
+                      }}
+                      className={`w-16 h-8 rounded-full transition-all duration-300 flex items-center px-1 ${
+                        adultContent
+                          ? 'bg-red-600 shadow-[0_0_25px_rgba(229,9,20,0.45)]'
+                          : 'bg-gray-700'
+                      }`}
+                    >
+                      <span
+                        className={`h-6 w-6 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                          adultContent ? 'translate-x-7' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Persistent Floating Continue Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/90 backdrop-blur-sm border-t border-gray-800">
-        <div className="max-w-4xl mx-auto">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] backdrop-blur">
+        <div className="mx-auto max-w-5xl">
           <button
             onClick={handleContinue}
-            className="w-full bg-red-600 text-white font-bold py-4 px-8 rounded-full text-xl hover:bg-red-700 active:bg-red-800 transition-all touch-manipulation"
+            disabled={!canContinue}
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-lg font-medium transition-colors duration-300 ${
+              canContinue
+                ? 'border border-red-600/70 bg-red-600/10 text-white shadow-[0_0_12px_rgba(255,0,0,0.35)] hover:bg-red-600/20'
+                : 'cursor-not-allowed border border-white/10 bg-white/[0.02] text-white/40'
+            }`}
           >
-            Continue →
+            <span className="italic">Continue</span>
+            <span className="text-base">→</span>
           </button>
         </div>
       </div>

@@ -49,3 +49,12 @@ Takes ~5-10 minutes. You'll see progress in the terminal.
 
 Now when you enable "IMDb Top 250 Movies" filter in your app, it will load all 250 movies instantly from Supabase!
 
+
+
+
+
+
+
+
+
+

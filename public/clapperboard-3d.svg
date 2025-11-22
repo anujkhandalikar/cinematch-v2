@@ -1,0 +1,56 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="clapperGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#0a0a0a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="stickGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0a0a;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="2" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.5"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Shadow -->
+  <ellipse cx="60" cy="112" rx="40" ry="6" fill="black" opacity="0.4"/>
+  
+  <!-- Main clapperboard body -->
+  <rect x="22" y="42" width="76" height="48" rx="3" fill="url(#clapperGradient)" filter="url(#shadow)"/>
+  <rect x="22" y="42" width="76" height="48" rx="3" fill="none" stroke="#2a2a2a" stroke-width="1"/>
+  
+  <!-- 3D effect - top highlight -->
+  <rect x="22" y="42" width="76" height="3" rx="3" fill="#333" opacity="0.6"/>
+  
+  <!-- Horizontal lines -->
+  <line x1="28" y1="55" x2="92" y2="55" stroke="#2a2a2a" stroke-width="1"/>
+  <line x1="28" y1="65" x2="92" y2="65" stroke="#2a2a2a" stroke-width="1"/>
+  
+  <!-- Hinge -->
+  <path d="M 22 42 L 22 52 L 16 52 L 16 46 L 22 42 Z" fill="#444" filter="url(#shadow)"/>
+  <circle cx="19" cy="47" r="1.5" fill="#1a1a1a"/>
+  <circle cx="19" cy="52" r="1.5" fill="#1a1a1a"/>
+  
+  <!-- Clapper stick (raised) -->
+  <g transform="rotate(-12 60 28)" filter="url(#shadow)">
+    <rect x="18" y="18" width="84" height="18" rx="2" fill="url(#stickGradient)"/>
+    <rect x="18" y="18" width="84" height="4" rx="2" fill="#444" opacity="0.5"/>
+    <!-- Diagonal stripes -->
+    <line x1="24" y1="22" x2="32" y2="30" stroke="#666" stroke-width="2.5"/>
+    <line x1="38" y1="22" x2="46" y2="30" stroke="#666" stroke-width="2.5"/>
+    <line x1="52" y1="22" x2="60" y2="30" stroke="#666" stroke-width="2.5"/>
+    <line x1="66" y1="22" x2="74" y2="30" stroke="#666" stroke-width="2.5"/>
+    <line x1="80" y1="22" x2="88" y2="30" stroke="#666" stroke-width="2.5"/>
+  </g>
+</svg>
+

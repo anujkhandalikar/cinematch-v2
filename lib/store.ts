@@ -5,6 +5,8 @@ export type Genre = 'Action' | 'Adventure' | 'Animation' | 'Biography' | 'Comedy
 export type OTTPlatform = 'Netflix' | 'Prime Video' | 'Hotstar' | 'Disney+' | 'HBO Max' | 'Hulu' | 'Apple TV+' | 'Paramount+' | 'Peacock';
 export type Language = 'English' | 'Hindi' | 'Spanish' | 'French' | 'German' | 'Italian' | 'Portuguese' | 'Russian' | 'Chinese' | 'Japanese' | 'Korean' | 'Arabic' | 'Turkish' | 'Dutch' | 'Swedish' | 'Norwegian' | 'Danish' | 'Finnish' | 'Polish' | 'Czech' | 'Hungarian' | 'Romanian' | 'Bulgarian' | 'Croatian' | 'Serbian' | 'Slovak' | 'Slovenian' | 'Greek' | 'Hebrew' | 'Thai' | 'Vietnamese' | 'Indonesian' | 'Malay' | 'Filipino' | 'Bengali' | 'Tamil' | 'Telugu' | 'Marathi' | 'Gujarati' | 'Punjabi' | 'Urdu' | 'Kannada' | 'Malayalam';
 
+export type MoodPreset = 'LightFun' | 'CriticallyAcclaimed' | 'NewPopular' | 'Bollywood';
+
 export interface Movie {
   id: string;
   title: string;
@@ -24,9 +26,13 @@ export interface UserPreferences {
   ottPlatforms: OTTPlatform[];
   languages: Language[];
   adultContent: boolean;
-  releaseYear: '2025' | '2000s' | 'older' | null;
+  releaseYear: number | '2025' | '2000s' | 'older' | null;
   highRatedOnly?: boolean; // Only show movies with rating >= 8
   imdbTop250Movies?: boolean; // Only show IMDb Top 250 movies
+  releaseAfterMonths?: number | null;
+  moodPreset?: MoodPreset | null;
+  moodIncludeGenres?: Genre[];
+  moodExcludeGenres?: Genre[];
 }
 
 interface Session {
@@ -128,6 +134,10 @@ const initialPreferences: UserPreferences = {
   releaseYear: null,
   highRatedOnly: false,
   imdbTop250Movies: false,
+  releaseAfterMonths: null,
+  moodPreset: null,
+  moodIncludeGenres: [],
+  moodExcludeGenres: [],
 };
 
 export const useStore = create<AppState>((set) => ({
@@ -181,15 +191,26 @@ export const useStore = create<AppState>((set) => ({
     session: current.session ? { ...current.session, ...state } : null
   })),
   
-  combinePreferences: (creatorPrefs, joinerPrefs) => ({
-    genres: [...new Set([...creatorPrefs.genres, ...joinerPrefs.genres])],
-    ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
-    languages: [...new Set([...creatorPrefs.languages, ...joinerPrefs.languages])],
-    adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
-    releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null,
-    highRatedOnly: !!(creatorPrefs.highRatedOnly || joinerPrefs.highRatedOnly),
-    imdbTop250Movies: !!(creatorPrefs.imdbTop250Movies || joinerPrefs.imdbTop250Movies)
-  }),
+  combinePreferences: (creatorPrefs, joinerPrefs) => {
+    const creatorIncludes = creatorPrefs.moodIncludeGenres ?? [];
+    const joinerIncludes = joinerPrefs.moodIncludeGenres ?? [];
+    const creatorExcludes = creatorPrefs.moodExcludeGenres ?? [];
+    const joinerExcludes = joinerPrefs.moodExcludeGenres ?? [];
+
+    return {
+      genres: [...new Set([...creatorPrefs.genres, ...joinerPrefs.genres])],
+      ottPlatforms: [...new Set([...creatorPrefs.ottPlatforms, ...joinerPrefs.ottPlatforms])],
+      languages: [...new Set([...creatorPrefs.languages, ...joinerPrefs.languages])],
+      adultContent: creatorPrefs.adultContent || joinerPrefs.adultContent,
+      releaseYear: creatorPrefs.releaseYear || joinerPrefs.releaseYear || null,
+      highRatedOnly: !!(creatorPrefs.highRatedOnly || joinerPrefs.highRatedOnly),
+      imdbTop250Movies: !!(creatorPrefs.imdbTop250Movies || joinerPrefs.imdbTop250Movies),
+      releaseAfterMonths: creatorPrefs.releaseAfterMonths ?? joinerPrefs.releaseAfterMonths ?? null,
+      moodPreset: creatorPrefs.moodPreset === joinerPrefs.moodPreset ? creatorPrefs.moodPreset : null,
+      moodIncludeGenres: [...new Set([...creatorIncludes, ...joinerIncludes])],
+      moodExcludeGenres: [...new Set([...creatorExcludes, ...joinerExcludes])],
+    };
+  },
   
   timerStart: null,
   timerEnd: null,
@@ -251,14 +272,40 @@ export const useStore = create<AppState>((set) => ({
       console.log('Manually refreshing session state');
       const updatedSession = await sessionService.getSessionByCode(state.session.code!);
       console.log('Refreshed session data:', updatedSession);
+      console.log('Refreshed preferences:', {
+        creator: updatedSession.creator_preferences,
+        joiner: updatedSession.joiner_preferences
+      });
       
-      set((state) => ({
-        session: state.session ? {
-          ...state.session,
-          partnerReady: state.session.isCreator ? updatedSession.joiner_ready : updatedSession.creator_ready,
-          supabaseSession: updatedSession,
-        } : null
-      }));
+      set((state) => {
+        if (!state.session) return state;
+        
+        const updatedCreatorPrefs = updatedSession.creator_preferences || state.session.creatorPreferences;
+        const updatedJoinerPrefs = updatedSession.joiner_preferences || state.session.joinerPreferences;
+        
+        // Recalculate combined preferences if both are available
+        let combinedPrefs = state.session.combinedPreferences;
+        if (updatedCreatorPrefs && updatedJoinerPrefs) {
+          const { combinePreferences } = useStore.getState();
+          combinedPrefs = combinePreferences(updatedCreatorPrefs, updatedJoinerPrefs);
+          console.log('🔄 Recalculated combined preferences from refresh:', {
+            creator: updatedCreatorPrefs,
+            joiner: updatedJoinerPrefs,
+            combined: combinedPrefs
+          });
+        }
+        
+        return {
+          session: {
+            ...state.session,
+            partnerReady: state.session.isCreator ? updatedSession.joiner_ready : updatedSession.creator_ready,
+            supabaseSession: updatedSession,
+            creatorPreferences: updatedCreatorPrefs,
+            joinerPreferences: updatedJoinerPrefs,
+            combinedPreferences: combinedPrefs
+          }
+        };
+      });
     } catch (error) {
       console.error('Error refreshing session state:', error);
     }
@@ -267,6 +314,7 @@ export const useStore = create<AppState>((set) => ({
   // Supabase integration methods
   createSupabaseSession: async (mode, preferences) => {
     try {
+      console.log('🔄 createSupabaseSession: Starting...');
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const sessionCode = Math.floor(100000 + Math.random() * 900000).toString();
       const sharedSeed = 0.5;
@@ -282,9 +330,19 @@ export const useStore = create<AppState>((set) => ({
         creator_preferences: preferences,
       };
       
-      console.log('Creating Supabase session with data:', supabaseSessionData);
+      console.log('📤 Creating Supabase session with data:', {
+        code: sessionCode,
+        mode,
+        userId,
+        hasPreferences: !!preferences,
+        preferencesKeys: preferences ? Object.keys(preferences) : []
+      });
+      
       const supabaseSession = await sessionService.createSession(supabaseSessionData);
-      console.log('Supabase session created:', supabaseSession);
+      console.log('✅ Supabase session created:', {
+        id: supabaseSession.id,
+        code: supabaseSession.code
+      });
       
       const session: Session = {
         id: supabaseSession.id,
@@ -303,36 +361,94 @@ export const useStore = create<AppState>((set) => ({
       };
       
       set({ session });
-      console.log('Local session state updated');
-    } catch (error) {
-      console.error('Error creating Supabase session:', error);
-      throw error;
+      console.log('✅ Local session state updated');
+    } catch (error: any) {
+      const isTableNotFound = error?.isTableNotFound ||
+                             error?.message?.includes('Table not found') ||
+                             error?.code === 'PGRST205' ||
+                             error?.message?.includes('Could not find the table');
+
+      const isApiKeyError = error?.isMissingApiKey ||
+                           error?.isInvalidApiKey ||
+                           error?.code === 'MISSING_API_KEY' ||
+                           error?.code === 'INVALID_API_KEY' ||
+                           error?.message?.includes('Invalid API key') ||
+                           error?.message?.includes('Invalid Supabase API key') ||
+                           error?.message?.includes('Missing Supabase API key') ||
+                           error?.message?.includes('Supabase API key is missing');
+
+      const log = isTableNotFound || isApiKeyError ? console.warn : console.error;
+      const prefix = isTableNotFound || isApiKeyError ? '⚠️ createSupabaseSession: Expected Supabase configuration issue' : '❌ createSupabaseSession: Error caught';
+
+      log(prefix);
+      log('   Error type:', typeof error);
+      log('   Error constructor:', error?.constructor?.name);
+      log('   Error message:', error?.message);
+      log('   Error code:', error?.code);
+      log('   Error details:', error?.details);
+      log('   Error hint:', error?.hint);
+
+      if (isTableNotFound || isApiKeyError) {
+        const errorType = isApiKeyError ? 'API key' : 'Table not found';
+        console.warn(`⚠️ ${errorType} error - will use fallback`);
+        throw error;
+      }
+
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      const errorDetails = error?.details || error?.hint || error?.code || '';
+      log('❌ Error creating Supabase session:', {
+        message: errorMessage,
+        details: errorDetails,
+      });
+
+      const enhancedError = new Error(`Failed to create session: ${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`);
+
+      if (error && typeof error === 'object') {
+        for (const key of Object.getOwnPropertyNames(error)) {
+          if (!(key in enhancedError)) {
+            (enhancedError as any)[key] = (error as any)[key];
+          }
+        }
+      }
+
+      throw enhancedError;
     }
   },
 
   joinSupabaseSession: async (code, preferences) => {
     try {
+      console.log('🔄 joinSupabaseSession: Starting...');
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      console.log('Joining Supabase session with code:', code);
+      console.log('📤 Joining Supabase session with code:', code);
       const supabaseSession = await sessionService.getSessionByCode(code);
-      console.log('Found session:', supabaseSession);
+      console.log('✅ Found session:', {
+        id: supabaseSession?.id,
+        code: supabaseSession?.code,
+        hasJoiner: !!supabaseSession?.joiner_id
+      });
       
       if (!supabaseSession) {
+        console.error('❌ Session not found for code:', code);
         throw new Error('Session not found');
       }
       
       if (supabaseSession.joiner_id) {
+        console.error('❌ Session is already full');
         throw new Error('Session is full');
       }
       
       // Update session with joiner info
-      console.log('Updating session with joiner info');
+      console.log('📤 Updating session with joiner info...');
       const updatedSession = await sessionService.updateSession(supabaseSession.id, {
         joiner_id: userId,
         joiner_preferences: preferences,
       });
-      console.log('Session updated:', updatedSession);
+      console.log('✅ Session updated:', {
+        id: updatedSession.id,
+        code: updatedSession.code,
+        hasJoiner: !!updatedSession.joiner_id
+      });
       
       const session: Session = {
         id: updatedSession.id,
@@ -352,9 +468,42 @@ export const useStore = create<AppState>((set) => ({
       };
       
       set({ session });
-      console.log('Local session state updated for joiner');
-    } catch (error) {
-      console.error('Error joining Supabase session:', error);
+      console.log('✅ Local session state updated for joiner');
+    } catch (error: any) {
+      console.error('❌ joinSupabaseSession: Error caught');
+      console.error('   Error type:', typeof error);
+      console.error('   Error constructor:', error?.constructor?.name);
+      console.error('   Error message:', error?.message || 'No message');
+      console.error('   Error code:', error?.code || 'No code');
+      console.error('   Error details:', error?.details || 'No details');
+      console.error('   Error hint:', error?.hint || 'No hint');
+      console.error('   Error toString:', error?.toString?.());
+      
+      // Try to stringify error with error handling
+      try {
+        console.error('   Error JSON:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      } catch (stringifyErr) {
+        console.error('   Could not stringify error:', stringifyErr);
+      }
+      
+      // Check if this is a table not found error (we have fallback for this)
+      const isTableNotFound = error?.isTableNotFound || 
+                             error?.message?.includes('Table not found') ||
+                             error?.code === 'PGRST205' ||
+                             error?.message?.includes('Could not find the table');
+      
+      if (isTableNotFound) {
+        console.log('⚠️ Table not found - will use fallback');
+        // Silently fail - fallback will be used, no need to log
+        throw error; // Re-throw so fallback can catch it
+      }
+      
+      // Log other errors
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      console.error('❌ Error joining Supabase session:', {
+        message: errorMessage,
+        code: error?.code,
+      });
       throw error;
     }
   },
@@ -424,19 +573,63 @@ export const useStore = create<AppState>((set) => ({
         // Handle different event types
         if ((payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') && payload.new) {
           const newSession = payload.new;
+          const currentState = useStore.getState();
+          const isJoiner = !currentState.session?.isCreator;
+          
           console.log('Processing session update:', {
-            isCreator: state.session?.isCreator,
+            isCreator: currentState.session?.isCreator,
+            isJoiner: isJoiner,
             creatorReady: newSession.creator_ready,
             joinerReady: newSession.joiner_ready,
-            partnerReady: state.session?.isCreator ? newSession.joiner_ready : newSession.creator_ready
+            partnerReady: currentState.session?.isCreator ? newSession.joiner_ready : newSession.creator_ready,
+            creatorPreferences: newSession.creator_preferences,
+            joinerPreferences: newSession.joiner_preferences,
+            hasMovieDeck: !!newSession.movie_deck,
+            movieDeckLength: newSession.movie_deck?.length || 0
           });
-          set((state) => ({
-            session: state.session ? {
-              ...state.session,
-              partnerReady: state.session.isCreator ? newSession.joiner_ready : newSession.creator_ready,
-              supabaseSession: newSession,
-            } : null
-          }));
+          
+          // CRITICAL: If joiner detects movie_deck is available, load it immediately
+          if (isJoiner && newSession.movie_deck && Array.isArray(newSession.movie_deck) && newSession.movie_deck.length > 0) {
+            console.log('🎉 JOINER: Movie deck detected via real-time subscription!');
+            console.log('📊 Deck size:', newSession.movie_deck.length, 'movies');
+            console.log('🎥 First 5 movies:', newSession.movie_deck.slice(0, 5).map((m: any) => ({ title: m.title, id: m.id })));
+            
+            // Load movies immediately
+            const { loadMovies } = useStore.getState();
+            loadMovies(newSession.movie_deck);
+            console.log('✅ JOINER: Movies loaded from real-time subscription');
+          }
+          
+          // Update session state with new preferences
+          set((state) => {
+            if (!state.session) return state;
+            
+            const updatedCreatorPrefs = newSession.creator_preferences || state.session.creatorPreferences;
+            const updatedJoinerPrefs = newSession.joiner_preferences || state.session.joinerPreferences;
+            
+            // Recalculate combined preferences if both are available
+            let combinedPrefs = state.session.combinedPreferences;
+            if (updatedCreatorPrefs && updatedJoinerPrefs) {
+              const { combinePreferences } = useStore.getState();
+              combinedPrefs = combinePreferences(updatedCreatorPrefs, updatedJoinerPrefs);
+              console.log('🔄 Recalculated combined preferences from session update:', {
+                creator: updatedCreatorPrefs,
+                joiner: updatedJoinerPrefs,
+                combined: combinedPrefs
+              });
+            }
+            
+            return {
+              session: {
+                ...state.session,
+                partnerReady: state.session.isCreator ? newSession.joiner_ready : newSession.creator_ready,
+                supabaseSession: newSession,
+                creatorPreferences: updatedCreatorPrefs,
+                joinerPreferences: updatedJoinerPrefs,
+                combinedPreferences: combinedPrefs
+              }
+            };
+          });
         }
       }
     );
