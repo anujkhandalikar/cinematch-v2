@@ -1402,10 +1402,11 @@ export default function SwipeDeck() {
               height: '100%',
               maxHeight: '100%',
               width: '100%',
-              transform: 'scale(0.95)',
+              transform: 'scale(0.95) rotate(0deg) translateX(0) translateY(0)',
               opacity: 0.6,
               zIndex: 0,
               pointerEvents: 'none',
+              transformOrigin: 'center center',
             }}
           >
             {renderCardContent(nextMoviePreview, true)}

@@ -512,11 +512,12 @@ export default function ShortlistScreen() {
         <div className="flex gap-4 justify-center mb-12 sm:mb-16">
           <motion.button
             onClick={handleStartOver}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="bg-white text-red-600 font-light px-8 sm:px-10 py-3 sm:py-3.5 rounded-full hover:bg-red-600 hover:text-white transition-all duration-300 text-sm sm:text-base touch-manipulation shadow-[0_4px_12px_rgba(255,255,255,0.1)] hover:shadow-[0_6px_16px_rgba(239,68,68,0.3)] tracking-tight"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-lg font-medium transition-colors duration-300 border border-red-600/70 bg-red-600/10 text-white shadow-[0_0_12px_rgba(255,0,0,0.35)] hover:bg-red-600/20"
           >
-            Start Over
+            <span className="italic">Start Over</span>
+            <span className="text-base">→</span>
           </motion.button>
         </div>
 

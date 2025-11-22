@@ -126,7 +126,9 @@ export default function HomeScreen() {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="text-xs sm:text-sm text-gray-400 font-light mb-3 sm:mb-4 tracking-[0.14em]"
           >
-            Start. Match. Watch.
+            Tinder for Movies
+            <br />
+            Less Scrolling, More Watching
           </motion.p>
 
         </div>
@@ -355,8 +357,8 @@ export default function HomeScreen() {
       </div>
       
       {/* Start Button - Fixed at Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black via-black/95 to-transparent pb-6 sm:pb-8 pt-8 px-4 sm:px-6">
-        <div className="max-w-2xl mx-auto w-full">
+      <div className="fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)] backdrop-blur">
+        <div className="mx-auto max-w-5xl">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={heroLoaded ? { opacity: 1, y: 0 } : {}}
@@ -366,14 +368,10 @@ export default function HomeScreen() {
               onClick={handleStartClick}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="group relative w-full overflow-hidden rounded-[24px] text-lg sm:text-xl font-medium tracking-[0.02em] text-[#F5F5F5] py-3 px-8 border-2 border-[#E50914]/60 transition-all duration-300 touch-manipulation flex items-center justify-center"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-lg font-medium transition-colors duration-300 border border-red-600/70 bg-red-600/10 text-white shadow-[0_0_12px_rgba(255,0,0,0.35)] hover:bg-red-600/20"
             >
-              <span className="absolute inset-0 rounded-[24px] bg-gradient-to-b from-[#111111] to-[#1a1a1a] transition-colors duration-300 group-hover:from-[#E50914] group-hover:to-[#B00610]" />
-              <span className="absolute inset-0 rounded-[24px] shadow-[inset_0_1px_6px_rgba(0,0,0,0.6)] pointer-events-none" />
-              <span className="relative z-10 flex items-center gap-1 transition-colors duration-300 group-hover:text-white">
-                <span className="italic">Start</span>
-                <span className="text-base transition-transform duration-300 group-hover:translate-x-1">→</span>
-              </span>
+              <span className="italic">Start</span>
+              <span className="text-base">→</span>
             </motion.button>
           </motion.div>
         </div>

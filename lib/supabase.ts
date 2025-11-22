@@ -809,3 +809,136 @@ export const matchesService = {
     return channel;
   }
 };
+
+// Movie card types
+export interface MovieCard {
+  card_id: string;
+  card_type: string;
+  card_config: any;
+  movies: any[];
+  updated_at: string;
+  created_at: string;
+}
+
+export const movieCardService = {
+  // Get movies for a mood card
+  async getMovieCard(cardId: string): Promise<MovieCard | null> {
+    try {
+      console.log('📤 movieCardService.getMovieCard: Calling Supabase...');
+      console.log('   Table: movie_cards');
+      console.log('   Card ID:', cardId);
+      
+      // Check if API key is missing
+      if (!supabaseAnonKey || supabaseAnonKey.trim() === '') {
+        console.warn('⚠️ Supabase API key is missing. Cannot fetch movie card.');
+        return null;
+      }
+      
+      const startTime = Date.now();
+      const query = supabase
+        .from('movie_cards')
+        .select('*')
+        .eq('card_id', cardId)
+        .single();
+      
+      const result = await withTimeout(query, 6000, 'Supabase getMovieCard');
+      const { data, error } = result;
+      
+      const duration = Date.now() - startTime;
+      console.log(`📥 movieCardService.getMovieCard: Response received (${duration}ms)`);
+      console.log('   Has data:', !!data);
+      console.log('   Has error:', !!error);
+      
+      if (error) {
+        // Don't throw - just log and return null
+        if (error.code === 'PGRST116') {
+          // No rows returned - card doesn't exist yet
+          console.log('ℹ️ Movie card not found:', cardId);
+        } else {
+          console.error('❌ movieCardService.getMovieCard: Supabase error');
+          console.error('   Error code:', error.code);
+          console.error('   Error message:', error.message);
+        }
+        return null;
+      }
+      
+      if (!data) {
+        console.log('ℹ️ No movie card data returned');
+        return null;
+      }
+      
+      console.log('✅ movieCardService.getMovieCard: Success');
+      console.log('   Card ID:', data.card_id);
+      console.log('   Movies count:', Array.isArray(data.movies) ? data.movies.length : 0);
+      return data as MovieCard;
+    } catch (err: any) {
+      console.error('❌ movieCardService.getMovieCard: Exception caught');
+      console.error('   Error message:', err?.message);
+      return null;
+    }
+  },
+
+  // Upsert (insert or update) a movie card
+  async upsertMovieCard(cardId: string, cardType: string, cardConfig: any, movies: any[]): Promise<MovieCard | null> {
+    try {
+      console.log('📤 movieCardService.upsertMovieCard: Calling Supabase...');
+      console.log('   Table: movie_cards');
+      console.log('   Card ID:', cardId);
+      console.log('   Movies count:', movies.length);
+      
+      // Check if API key is missing
+      if (!supabaseAnonKey || supabaseAnonKey.trim() === '') {
+        const errorMessage = 'Supabase API key is missing. Please set NEXT_PUBLIC_SUPABASE_PARTNER_ANON_KEY (or NEXT_PUBLIC_SUPABASE_IMDB_ANON_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) in your .env.local file.';
+        console.error('❌', errorMessage);
+        throw new Error(errorMessage);
+      }
+      
+      const cardData = {
+        card_id: cardId,
+        card_type: cardType,
+        card_config: cardConfig,
+        movies: movies,
+        updated_at: new Date().toISOString()
+      };
+      
+      const startTime = Date.now();
+      const query = supabase
+        .from('movie_cards')
+        .upsert(cardData, {
+          onConflict: 'card_id'
+        })
+        .select()
+        .single();
+      
+      const result = await withTimeout(query, 10000, 'Supabase upsertMovieCard');
+      const { data, error } = result;
+      
+      const duration = Date.now() - startTime;
+      console.log(`📥 movieCardService.upsertMovieCard: Response received (${duration}ms)`);
+      console.log('   Has data:', !!data);
+      console.log('   Has error:', !!error);
+      
+      if (error) {
+        console.error('❌ movieCardService.upsertMovieCard: Supabase error');
+        console.error('   Error code:', error.code);
+        console.error('   Error message:', error.message);
+        console.error('   Error details:', error.details);
+        throw error;
+      }
+      
+      if (!data) {
+        console.error('❌ No data returned from Supabase upsert');
+        throw new Error('No data returned from Supabase');
+      }
+      
+      console.log('✅ movieCardService.upsertMovieCard: Success');
+      console.log('   Card ID:', data.card_id);
+      console.log('   Movies count:', Array.isArray(data.movies) ? data.movies.length : 0);
+      return data as MovieCard;
+    } catch (err: any) {
+      console.error('❌ movieCardService.upsertMovieCard: Exception caught');
+      console.error('   Error message:', err?.message);
+      throw err;
+    }
+  }
+};

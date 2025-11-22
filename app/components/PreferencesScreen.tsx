@@ -16,11 +16,12 @@ const OTT_PLATFORMS: OTTPlatform[] = [
 ];
 
 interface MoodCard {
-  key: MoodPreset;
+  key: MoodPreset | 'FineTuneInfo';
   title: string;
   subtitle: string;
   image: string;
   gradient: string;
+  isInfoCard?: boolean;
 }
 
 const MOOD_CARDS: MoodCard[] = [
@@ -51,6 +52,14 @@ const MOOD_CARDS: MoodCard[] = [
     subtitle: 'Award-winning cinema with prestige and polish.',
     image: '/dark%20knight.jpg',
     gradient: 'linear-gradient(200deg, rgba(10,12,26,0.85) 0%, rgba(5,5,10,0.88) 60%, rgba(0,0,0,0.96) 100%)'
+  },
+  {
+    key: 'FineTuneInfo',
+    title: 'Want something more finetuned?',
+    subtitle: 'Scroll below',
+    image: '/3 idiots.jpg',
+    gradient: 'linear-gradient(200deg, rgba(20,20,30,0.85) 0%, rgba(10,10,20,0.88) 60%, rgba(0,0,0,0.96) 100%)',
+    isInfoCard: true
   }
 ];
 
@@ -114,13 +123,10 @@ export default function PreferencesScreen() {
   const [imdbTop250Movies, setImdbTop250Movies] = useState(initialImdbTop250);
 
   const totalMoodCards = MOOD_CARDS.length;
-  const initialMoodIndex = (() => {
-    if (!preferences.moodPreset) return 0;
-    const index = MOOD_CARDS.findIndex((card) => card.key === preferences.moodPreset);
-    return index >= 0 ? index : 0;
-  })();
+  // Always start with Bollywood (index 0) preselected
+  const initialMoodIndex = 0;
 
-  const [selectedMood, setSelectedMood] = useState<MoodPreset | null>(preferences.moodPreset ?? null);
+  const [selectedMood, setSelectedMood] = useState<MoodPreset | null>(preferences.moodPreset ?? 'Bollywood');
   const [activeMoodIndex, setActiveMoodIndex] = useState(initialMoodIndex);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const [isFineTuneOpen, setIsFineTuneOpen] = useState(false);
@@ -131,6 +137,83 @@ export default function PreferencesScreen() {
 
   useEffect(() => {
     trackEvent({ event: 'Preferences_Page_Visited' });
+    // Preselect Bollywood on initial load if no preset exists
+    if (!preferences.moodPreset) {
+      setSelectedMood('Bollywood');
+      setActiveMoodIndex(0);
+    }
+  }, []);
+
+  // Handle scroll to detect when a card is swiped to center and auto-select it
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
+    const handleScroll = () => {
+      const cards = carousel.querySelectorAll<HTMLElement>('[data-mood-card]');
+      const containerRect = carousel.getBoundingClientRect();
+      const containerCenter = containerRect.left + containerRect.width / 2;
+
+      let closestIndex = 0;
+      let closestDistance = Infinity;
+
+      cards.forEach((card, index) => {
+        const cardRect = card.getBoundingClientRect();
+        const cardCenter = cardRect.left + cardRect.width / 2;
+        const distance = Math.abs(cardCenter - containerCenter);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      setActiveMoodIndex((prevIndex) => {
+        if (closestIndex !== prevIndex) {
+          const card = MOOD_CARDS[closestIndex];
+          // Auto-select the card if it's not an info card
+          if (card && !card.isInfoCard && card.key !== 'FineTuneInfo') {
+            const moodKey = card.key as MoodPreset;
+            setSelectedMood(moodKey);
+            setCardsBlurred(false);
+            setFiltersBlurred(true);
+            setHasManualAdjustments(false);
+            setIsFineTuneOpen(false);
+            setSelectedGenres([]);
+            setSelectedPlatforms([]);
+            setSelectedLanguages([]);
+            setReleaseYear(null);
+            setHighRatedOnly(false);
+            setAdultContent(false);
+            setImdbTop250Movies(false);
+            trackEvent({
+              event: 'Mood_Selected',
+              category: 'mood',
+              option: moodKey,
+            });
+          }
+          return closestIndex;
+        }
+        return prevIndex;
+      });
+    };
+
+    // Use a debounced scroll handler to avoid too many updates
+    let scrollTimeout: NodeJS.Timeout;
+    const debouncedHandleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(handleScroll, 100);
+    };
+
+    carousel.addEventListener('scroll', debouncedHandleScroll, { passive: true });
+    
+    // Also check on mount to set initial state
+    handleScroll();
+
+    return () => {
+      carousel.removeEventListener('scroll', debouncedHandleScroll);
+      clearTimeout(scrollTimeout);
+    };
   }, []);
 
   useEffect(() => {
@@ -170,6 +253,16 @@ export default function PreferencesScreen() {
       event: 'Mood_Selected',
       category: 'mood',
       option: mood,
+    });
+    
+    // Scroll to the selected card
+    requestAnimationFrame(() => {
+      const scrollContainer = carouselRef.current;
+      if (scrollContainer) {
+        const cards = scrollContainer.querySelectorAll<HTMLButtonElement>('[data-mood-card]');
+        const targetCard = cards[normalizedIndex]?.parentElement as HTMLElement | undefined;
+        targetCard?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
     });
   };
 
@@ -371,12 +464,26 @@ export default function PreferencesScreen() {
                 {MOOD_CARDS.map((card, index) => {
                   const isCentered = index === activeMoodIndex;
                   const isSelected = selectedMood === card.key;
+                  const isInfoCard = card.isInfoCard || card.key === 'FineTuneInfo';
+                  
+                  // For info card, make it clickable to scroll to fine-tune section
+                  const handleCardClick = () => {
+                    if (isInfoCard) {
+                      setIsFineTuneOpen(true);
+                      requestAnimationFrame(() => {
+                        filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      });
+                    } else {
+                      handleMoodSelect(card.key as MoodPreset);
+                    }
+                  };
+                  
                   return (
                     <button
                       key={card.key}
                       type="button"
-                      onClick={() => handleMoodSelect(card.key)}
-                      aria-pressed={selectedMood === card.key}
+                      onClick={handleCardClick}
+                      aria-pressed={!isInfoCard && selectedMood === card.key}
                       className={`group relative flex snap-center flex-col overflow-visible rounded-3xl p-3 transition-transform duration-500 ease-in-out active:scale-[0.99] md:p-4 ${
                         isCentered ? 'scale-100 opacity-100' : 'scale-[0.88] opacity-60'
                       }`}
@@ -385,7 +492,7 @@ export default function PreferencesScreen() {
                       <div
                         data-mood-card
                         className={`relative flex aspect-[3/4] min-w-[220px] flex-col justify-end overflow-visible rounded-2xl border transition-all duration-500 ease-in-out ${cardWidthClass} ${
-                          isSelected
+                          !isInfoCard && isSelected
                             ? 'border-red-600/80 shadow-[0_0_12px_rgba(255,0,0,0.55)]'
                             : 'border-white/10 hover:border-white/20 hover:shadow-[0_0_14px_rgba(255,0,0,0.2)]'
                         }`}

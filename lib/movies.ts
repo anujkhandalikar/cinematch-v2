@@ -12,6 +12,8 @@ import {
 } from './tmdb';
 import { loadMoviesProgressively, getCachedMovies } from './movieCache';
 import { streamDiscoverAll, streamLanguageAll, fetchLanguageSeed } from './ingestion';
+import { getMoodCardId } from './movieCards';
+import { movieCardService } from './supabase';
 
 // Seeded random number generator for deterministic shuffling
 function seededRandom(seed: number) {
@@ -66,7 +68,44 @@ export async function fetchFilteredMovies(preferences: {
   moodPreset?: MoodPreset | null;
 }, onProgress?: (movies: Movie[], isComplete: boolean) => void): Promise<Movie[]> {
   try {
-    console.log('Fetching movies from TMDB with preferences:', preferences);
+    console.log('Fetching movies with preferences:', preferences);
+    
+    // NEW: Check if mood preset is selected - use Supabase pre-stored movies
+    const cardId = getMoodCardId(preferences);
+    if (cardId) {
+      console.log(`🎬 Mood preset selected: ${cardId} - fetching from Supabase`);
+      
+      const movieCard = await movieCardService.getMovieCard(cardId);
+      if (movieCard && Array.isArray(movieCard.movies) && movieCard.movies.length > 0) {
+        console.log(`✅ Found ${movieCard.movies.length} pre-stored movies for ${cardId}`);
+        
+        // Apply additional filters to the 100 pre-stored movies
+        const filtered = filterMovies(movieCard.movies as Movie[], {
+          genres: preferences.genres,
+          ottPlatforms: preferences.ottPlatforms,
+          languages: preferences.languages,
+          adultContent: preferences.adultContent,
+          releaseYear: preferences.releaseYear,
+          highRatedOnly: preferences.highRatedOnly,
+          releaseAfterMonths: preferences.releaseAfterMonths,
+          moodIncludeGenres: preferences.moodIncludeGenres,
+          moodExcludeGenres: preferences.moodExcludeGenres,
+          moodPreset: preferences.moodPreset,
+        });
+        
+        console.log(`✅ Filtered to ${filtered.length} movies after applying additional filters`);
+        onProgress?.(filtered, false);
+        onProgress?.(filtered, true);
+        return filtered;
+      } else {
+        console.warn(`⚠️ No pre-stored movies found for ${cardId} - returning empty array`);
+        onProgress?.([], true);
+        return [];
+      }
+    }
+    
+    // No mood preset selected - continue with original TMDB logic
+    console.log('No mood preset selected - using original TMDB logic');
     
     // Check if IMDb Top 250 filter is selected
     if (preferences.imdbTop250Movies) {
