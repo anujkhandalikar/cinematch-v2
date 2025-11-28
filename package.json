@@ -11,7 +11,9 @@
     "verify-cards": "tsx scripts/verify-movie-cards.ts",
     "check-tables": "tsx scripts/check-supabase-tables.ts",
     "display-cards": "tsx scripts/display-movie-cards.ts",
-    "fix-zero-rated": "tsx scripts/fix-zero-rated-movies.ts"
+    "fix-zero-rated": "tsx scripts/fix-zero-rated-movies.ts",
+    "filter-by-rating": "tsx scripts/filter-movie-cards-by-rating.ts",
+    "check-ratings": "tsx scripts/check-movie-ratings.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

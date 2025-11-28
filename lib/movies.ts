@@ -76,10 +76,39 @@ export async function fetchFilteredMovies(preferences: {
     if (cardId) {
       console.log(`🎬 Mood preset selected: ${cardId} - checking cache first`);
       
-      // Check cache first for instant return
-      let movieCard = getCachedMoodCard(cardId);
+      // Check cache first
+      const cachedCard = getCachedMoodCard(cardId);
+      let movieCard: any = null;
       
-      if (!movieCard) {
+      if (cachedCard) {
+        // Cache hit - check if it's stale before using it
+        try {
+          const { isCachedCardStale } = await import('./moodCardCache');
+          const { clearMoodCardCache } = await import('./moodCardCache');
+          
+          // Fetch fresh card to check timestamp
+          const freshCard = await movieCardService.getMovieCard(cardId);
+          if (freshCard && freshCard.updated_at) {
+            if (isCachedCardStale(cardId, freshCard.updated_at)) {
+              console.log(`   🔄 Cache is stale - using fresh data from Supabase`);
+              // Clear stale cache and use fresh data
+              clearMoodCardCache(cardId);
+              movieCard = freshCard;
+              setCachedMoodCard(cardId, freshCard);
+            } else {
+              console.log(`   ✅ Cache is fresh (updated: ${freshCard.updated_at})`);
+              movieCard = cachedCard;
+            }
+          } else {
+            // If we can't check, use cached data
+            movieCard = cachedCard;
+          }
+        } catch (error) {
+          console.warn(`   ⚠️ Error checking cache freshness, using cached data:`, error);
+          movieCard = cachedCard;
+        }
+      } else {
+        // Cache miss - fetch from Supabase
         console.log(`   Cache miss - fetching from Supabase...`);
         movieCard = await movieCardService.getMovieCard(cardId);
         
@@ -92,12 +121,20 @@ export async function fetchFilteredMovies(preferences: {
       if (movieCard && Array.isArray(movieCard.movies) && movieCard.movies.length > 0) {
         console.log(`✅ Found ${movieCard.movies.length} pre-stored movies for ${cardId}`);
         
-        // Mood cards are pre-curated and should be used as-is without any filtering
-        // The mood card already contains the right movies for that mood, so we return
-        // all movies directly without applying any filters
-        const allMovies = movieCard.movies as Movie[];
+        // Safety filter: Ensure all movies have rating >= 7 (client-side safety check)
+        const allMovies = (movieCard.movies as Movie[]).filter(m => {
+          const rating = typeof m.rating === 'number' ? m.rating : 0;
+          return rating >= 7;
+        });
         
-        console.log(`✅ Returning all ${allMovies.length} movies from mood card (no filters applied)`);
+        if (allMovies.length !== movieCard.movies.length) {
+          const removed = movieCard.movies.length - allMovies.length;
+          console.warn(`   ⚠️ Safety filter: Removed ${removed} movies with rating < 7 from ${cardId}`);
+          console.warn(`   ⚠️ This means Supabase still has movies with rating < 7. Run the filter script again.`);
+        }
+        
+        console.log(`✅ Returning ${allMovies.length} movies from mood card (rating >= 7)`);
+        console.log(`   🚫 NO TMDB calls - using ONLY Supabase data for mood cards`);
         
         // For mood cards, immediately show all movies (no progressive loading)
         // Call onProgress with complete=true immediately to show movies instantly
@@ -109,11 +146,13 @@ export async function fetchFilteredMovies(preferences: {
         return allMovies;
       } else {
         console.warn(`⚠️ No pre-stored movies found for ${cardId} - returning empty array`);
+        console.warn(`   🚫 NO TMDB fallback - mood cards must come from Supabase only`);
         onProgress?.([], true);
         return [];
       }
     }
     
+    // CRITICAL: If we reach here, mood preset was NOT selected
     // No mood preset selected - continue with original TMDB logic
     console.log('No mood preset selected - using original TMDB logic');
     

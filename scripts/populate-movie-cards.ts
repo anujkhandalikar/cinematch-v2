@@ -302,13 +302,31 @@ async function populateMoodCard(mood: MoodPreset): Promise<void> {
     
     console.log(`   📊 After filtering: ${uniqueMovies.length} unique movies`);
     
-    // If we don't have 100 movies, try to fetch more pages
-    if (uniqueMovies.length < 100 && mood !== 'CriticallyAcclaimed') {
-      console.log(`   ⚠️ Only got ${uniqueMovies.length} movies, fetching more pages...`);
+    movies = uniqueMovies;
+    
+    // Ensure we have at least 100 movies with rating > 7
+    // If we have less than 100, keep fetching more pages until we get 100
+    let attempts = 0;
+    const maxAttempts = 5; // Try up to 5 more rounds of fetching
+    
+    // Helper function to count movies with rating > 7
+    const countMoviesWithRatingAbove7 = (movieList: Movie[]) => {
+      return movieList.filter(m => {
+        const rating = typeof m.rating === 'number' ? m.rating : 0;
+        return rating > 7;
+      }).length;
+    };
+    
+    while (countMoviesWithRatingAbove7(movies) < 100 && attempts < maxAttempts && mood !== 'CriticallyAcclaimed') {
+      attempts++;
+      const moviesWithRatingAbove7 = countMoviesWithRatingAbove7(movies);
+      console.log(`   ⚠️ Only got ${moviesWithRatingAbove7} movies with rating > 7 (need 100), fetching more pages (attempt ${attempts}/${maxAttempts})...`);
       
       // Fetch additional pages
       const additionalPages: any[] = [];
-      const morePagesToFetch = 30; // Fetch 30 more pages
+      const morePagesToFetch = 20; // Fetch 20 more pages per attempt
+      const startPage = 20 + (attempts - 1) * morePagesToFetch + 1;
+      const endPage = startPage + morePagesToFetch - 1;
       
       if (mood === 'Bollywood' && preferences.languages && preferences.languages.length > 0) {
         // For Bollywood, fetch more language-specific pages
@@ -319,16 +337,21 @@ async function populateMoodCard(mood: MoodPreset): Promise<void> {
         const code = languageCodes[preferences.languages[0] as string];
         
         if (code) {
-          for (let page = 21; page <= 20 + morePagesToFetch; page++) {
-            const data = await fetchTMDBDiscoverPage(page, {
-              with_original_language: code,
-              language: 'en-US',
-              sort_by: 'popularity.desc',
-              include_adult: !!preferences.adultContent,
-            });
-            additionalPages.push(...(data.results || []));
-            if (page < 20 + morePagesToFetch) {
-              await new Promise(resolve => setTimeout(resolve, 250));
+          for (let page = startPage; page <= endPage; page++) {
+            try {
+              const data = await fetchTMDBDiscoverPage(page, {
+                with_original_language: code,
+                language: 'en-US',
+                sort_by: 'popularity.desc',
+                include_adult: !!preferences.adultContent,
+              });
+              additionalPages.push(...(data.results || []));
+              if (page < endPage) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+              }
+            } catch (error: any) {
+              console.warn(`   ⚠️ Error fetching page ${page}: ${error.message}`);
+              // Continue with other pages
             }
           }
         }
@@ -341,22 +364,27 @@ async function populateMoodCard(mood: MoodPreset): Promise<void> {
           dateGte = date.toISOString().split('T')[0];
         }
         
-        for (let page = 21; page <= 20 + morePagesToFetch; page++) {
-          const data = await fetchTMDBDiscoverPage(page, {
-            language: 'en-US',
-            sort_by: 'popularity.desc',
-            include_adult: !!preferences.adultContent,
-            ...(dateGte && { 'primary_release_date.gte': dateGte }),
-          });
-          additionalPages.push(...(data.results || []));
-          if (page < 20 + morePagesToFetch) {
-            await new Promise(resolve => setTimeout(resolve, 250));
+        for (let page = startPage; page <= endPage; page++) {
+          try {
+            const data = await fetchTMDBDiscoverPage(page, {
+              language: 'en-US',
+              sort_by: 'popularity.desc',
+              include_adult: !!preferences.adultContent,
+              ...(dateGte && { 'primary_release_date.gte': dateGte }),
+            });
+            additionalPages.push(...(data.results || []));
+            if (page < endPage) {
+              await new Promise(resolve => setTimeout(resolve, 250));
+            }
+          } catch (error: any) {
+            console.warn(`   ⚠️ Error fetching page ${page}: ${error.message}`);
+            // Continue with other pages
           }
         }
       }
       
       const additionalMovies = additionalPages.map(convertTMDBMovie);
-      const allMovies = [...uniqueMovies, ...additionalMovies];
+      const allMovies = [...movies, ...additionalMovies];
       
       // Re-filter with all movies
       const reFiltered = filterMovies(allMovies as Movie[], {
@@ -377,17 +405,37 @@ async function populateMoodCard(mood: MoodPreset): Promise<void> {
       );
       
       movies = finalUnique;
-      console.log(`   📊 After fetching more: ${finalUnique.length} unique movies`);
+      const countWithRatingAbove7 = countMoviesWithRatingAbove7(finalUnique);
+      console.log(`   📊 After attempt ${attempts}: ${finalUnique.length} unique movies (${countWithRatingAbove7} with rating > 7)`);
+      
+      // If we still don't have 100 movies with rating > 7, break and use what we have (but log a warning)
+      if (countWithRatingAbove7 >= 100) {
+        break;
+      }
     }
     
-    // Take top 100
-    const top100 = movies.slice(0, 100);
+    // Filter to only movies with rating > 7
+    const moviesWithRatingAbove7 = movies.filter(m => {
+      const rating = typeof m.rating === 'number' ? m.rating : 0;
+      return rating > 7;
+    });
     
-    console.log(`   ✅ Got ${top100.length} unique movies (target: 100)`);
+    // Take top 100 (or all if less than 100) from filtered movies
+    const top100Filtered = moviesWithRatingAbove7.slice(0, 100);
     
-    if (top100.length === 0) {
-      console.warn(`   ⚠️ No movies found for ${mood} - skipping`);
+    console.log(`   ✅ Got ${top100Filtered.length} unique movies with rating > 7 (target: 100)`);
+    if (movies.length !== moviesWithRatingAbove7.length) {
+      const removed = movies.length - moviesWithRatingAbove7.length;
+      console.log(`   📊 Filtered out ${removed} movies with rating ≤ 7`);
+    }
+    
+    if (top100Filtered.length === 0) {
+      console.warn(`   ⚠️ No movies with rating > 7 found for ${mood} - skipping`);
       return;
+    }
+    
+    if (top100Filtered.length < 100) {
+      console.warn(`   ⚠️ Warning: Only ${top100Filtered.length} movies with rating > 7 available for ${mood} (target: 100). Storing what we have.`);
     }
     
     // Store in Supabase
@@ -395,10 +443,10 @@ async function populateMoodCard(mood: MoodPreset): Promise<void> {
       mood,
       'mood_preset',
       config,
-      top100
+      top100Filtered
     );
     
-    console.log(`   ✅ Successfully stored ${top100.length} movies for ${mood}`);
+    console.log(`   ✅ Successfully stored ${top100Filtered.length} movies for ${mood}`);
   } catch (error: any) {
     console.error(`   ❌ Error populating ${mood}:`, error.message);
     throw error;

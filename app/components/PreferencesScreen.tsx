@@ -316,15 +316,21 @@ export default function PreferencesScreen() {
         setHasManualAdjustments(true);
         setCardsBlurred(true);
         setFiltersBlurred(false);
-        requestAnimationFrame(() => {
-          filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
+        // Scroll to fine-tune button and ensure it's at the top of viewport
+        setTimeout(() => {
+          if (filtersRef.current) {
+            const elementTop = filtersRef.current.getBoundingClientRect().top + window.pageYOffset;
+            window.scrollTo({ top: elementTop - 20, behavior: 'smooth' });
+          }
+        }, 100);
       } else {
         if (!selectedMood) {
           setSelectedMood(MOOD_CARDS[activeMoodIndex].key);
         }
         setCardsBlurred(false);
         setFiltersBlurred(true);
+        // Scroll back to top to show mood cards
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         requestAnimationFrame(() => {
           const scrollContainer = carouselRef.current;
           if (scrollContainer) {
@@ -467,26 +473,31 @@ export default function PreferencesScreen() {
           }}
         />
 
-        <div className="relative z-10 mx-auto max-w-4xl p-4 sm:p-6">
-          <button
-            onClick={() => setCurrentScreen('mode')}
-            className="mb-6 text-gray-400 hover:text-red-400 transition-colors text-sm font-light"
-          >
-            ← Back
-          </button>
-
-          <header className="pt-2 mb-10 text-center sm:mb-12">
-            <h1 className="mb-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-5xl" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
-              Pick a mood?
-            </h1>
-            <p className="text-base font-light italic text-white/70 md:text-lg">
-              We'll find the perfect movie for it.
-            </p>
+        <div className={`relative z-10 mx-auto max-w-4xl transition-all duration-300 ${isFineTuneOpen ? 'px-4 pt-4 pb-4 sm:px-6 sm:pt-6 sm:pb-6' : 'px-4 pt-2 pb-4 sm:px-6 sm:pt-4 sm:pb-6'}`}>
+          <header className={`mb-6 sm:mb-8 relative transition-all duration-300 ${isFineTuneOpen ? 'max-h-0 overflow-hidden opacity-0 mb-0' : ''}`}>
+            <button
+              onClick={() => setCurrentScreen('mode')}
+              className="absolute left-0 top-0 text-gray-400 hover:text-red-400 transition-colors text-lg font-light"
+            >
+              ←
+            </button>
+            <div className="text-center">
+              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl md:text-4xl" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
+                Pick a mood?
+              </h1>
+              <p className="text-base font-light italic text-white/70 md:text-lg mt-1">
+                We'll find the perfect movie for it.
+              </p>
+            </div>
           </header>
 
           <section
             className={`relative transition-all duration-200 ${
-              cardsBlurred ? 'scale-[0.98] blur-[1.5px]' : 'scale-100 blur-0'
+              isFineTuneOpen 
+                ? 'max-h-0 overflow-hidden opacity-0 pointer-events-none' 
+                : cardsBlurred 
+                  ? 'scale-[0.98] blur-[1.5px]' 
+                  : 'scale-100 blur-0'
             }`}
           >
             <div className="-mx-4 sm:-mx-6">
@@ -504,9 +515,18 @@ export default function PreferencesScreen() {
                   const handleCardClick = () => {
                     if (isInfoCard) {
                       setIsFineTuneOpen(true);
-                      requestAnimationFrame(() => {
-                        filtersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      });
+                      setSelectedMood(null);
+                      setHasManualAdjustments(true);
+                      setCardsBlurred(true);
+                      setFiltersBlurred(false);
+                      setTimeout(() => {
+                        // Find the fine-tune button container
+                        const fineTuneContainer = document.querySelector('[data-fine-tune-container]') as HTMLElement;
+                        if (fineTuneContainer) {
+                          const elementTop = fineTuneContainer.getBoundingClientRect().top + window.pageYOffset;
+                          window.scrollTo({ top: elementTop - 20, behavior: 'smooth' });
+                        }
+                      }, 100);
                     } else {
                       handleMoodSelect(card.key as MoodPreset);
                     }
@@ -558,7 +578,7 @@ export default function PreferencesScreen() {
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-24 bg-gradient-to-t from-black via-black/60 to-transparent" />
           </section>
 
-          <div className="mt-6">
+          <div className="mt-6" ref={filtersRef} data-fine-tune-container>
             <button
               type="button"
               onClick={handleFineTuneToggle}
@@ -578,7 +598,6 @@ export default function PreferencesScreen() {
             </button>
 
             <div
-              ref={filtersRef}
               className={`transform transition-all duration-500 ease-out overflow-hidden ${
                 isFineTuneOpen
                   ? 'pointer-events-auto mt-6 max-h-[4000px] opacity-100 translate-y-0'

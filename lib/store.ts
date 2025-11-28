@@ -153,7 +153,23 @@ export const useStore = create<AppState>((set) => ({
   currentMovieIndex: 0,
   likedMovies: [],
   setMovies: (movies) => set({ movies }),
-  loadMovies: (movies) => set({ movies, currentMovieIndex: 0 }),
+  loadMovies: (movies) => {
+    console.log(`📥 [STORE] loadMovies called with ${movies.length} movies`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`   First 5 movie IDs:`, movies.slice(0, 5).map(m => m.id));
+      console.log(`   First 5 movie years:`, movies.slice(0, 5).map(m => m.year));
+    }
+    set({ movies, currentMovieIndex: 0 });
+    // Verify what was actually set
+    setTimeout(() => {
+      const actual = useStore.getState().movies.length;
+      if (actual !== movies.length) {
+        console.error(`   ❌ [STORE] MISMATCH: Tried to load ${movies.length} but store has ${actual}`);
+      } else {
+        console.log(`   ✅ [STORE] Verified: ${actual} movies in store`);
+      }
+    }, 0);
+  },
   appendMovies: (newMovies) => set((state) => {
     // Merge and deduplicate by movie ID
     const existingIds = new Set(state.movies.map(m => m.id));

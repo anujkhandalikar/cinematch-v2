@@ -150,7 +150,7 @@ export default function ReadyScreen() {
       
       // Get combined preferences
       const base = (session.combinedPreferences || session.creatorPreferences) as Partial<UserPreferences> | undefined;
-      const preferences = {
+      const preferences: Partial<UserPreferences> = {
         genres: base?.genres ?? [],
         ottPlatforms: base?.ottPlatforms ?? [],
         languages: base?.languages ?? [],
@@ -158,6 +158,10 @@ export default function ReadyScreen() {
         releaseYear: typeof base?.releaseYear === 'number' ? base?.releaseYear : undefined,
         highRatedOnly: base?.highRatedOnly ?? false,
         imdbTop250Movies: base?.imdbTop250Movies ?? false,
+        releaseAfterMonths: base?.releaseAfterMonths ?? null,
+        moodIncludeGenres: base?.moodIncludeGenres ?? [],
+        moodExcludeGenres: base?.moodExcludeGenres ?? [],
+        moodPreset: base?.moodPreset ?? null,
       };
       
       // Preload movies in background

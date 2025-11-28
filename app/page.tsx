@@ -6,7 +6,7 @@ import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
 import { fetchLanguageSeed } from '@/lib/ingestion';
 import { convertTMDBToLanguages } from '@/lib/tmdb';
 import { getCachedMovies } from '@/lib/movieCache';
-import { sessionService } from '@/lib/supabase';
+import { movieCardService, sessionService } from '@/lib/supabase';
 import HomeScreen from './components/HomeScreen';
 import PreferencesScreen from './components/PreferencesScreen';
 import ModeSelectionScreen from './components/ModeSelectionScreen';
@@ -334,9 +334,16 @@ export default function Home() {
               ottPlatforms: prefsToUse.ottPlatforms
             });
             
+            // CRITICAL: Check for mood cards FIRST - they should bypass all language streaming
+            // Mood cards are pre-curated and should be loaded directly without any filtering
+            if (prefsToUse.moodPreset) {
+              console.log('🎬 Mood card selected - bypassing language streaming, using fetchFilteredMovies');
+              // Fall through to fetchFilteredMovies which handles mood cards correctly
+            }
             // If only language is selected (no genres/platforms), use streaming to fetch ALL pages
             // IMPORTANT: Use prefsToUse (combined preferences) instead of preferences
-            if ((prefsToUse.languages?.length ?? 0) > 0 &&
+            // BUT: Skip this if mood card is selected (mood cards should use fetchFilteredMovies)
+            else if ((prefsToUse.languages?.length ?? 0) > 0 &&
                 (prefsToUse.genres?.length ?? 0) === 0 &&
                 (prefsToUse.ottPlatforms?.length ?? 0) === 0) {
               const { streamLanguageAll } = await import('@/lib/ingestion');
@@ -364,16 +371,17 @@ export default function Home() {
                         return true;
                       });
                       allLanguageMovies = [...allLanguageMovies, ...newMovies];
-                      const filtered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
                       
-                      // Final completion: always replace with final filtered set
+                      // Final completion: DON'T load movies here - wait for ALL languages to complete
+                      // Each language stream completing will overwrite the previous one
+                      // We'll load movies once after ALL languages complete
                       if (isComplete) {
-                        const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
-                        console.log(`✅ Language streaming complete: Loading ${finalFiltered.length} movies (from ${allLanguageMovies.length} total)`);
-                        useStore.getState().loadMovies(finalFiltered);
+                        console.log(`✅ Language ${lang} stream completed. Total movies so far: ${allLanguageMovies.length}`);
+                        // Don't load movies here - wait for all languages to complete
                       } else {
                         // During progressive loading: only update if we have no movies yet
                         // Don't append during streaming to avoid accumulation issues
+                        const filtered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
                         const currentMovies = useStore.getState().movies;
                         if (currentMovies.length === 0 && filtered.length > 0) {
                           console.log(`📥 Progressive load: Showing ${filtered.length} movies (${allLanguageMovies.length} total so far)`);
@@ -384,6 +392,36 @@ export default function Home() {
                   });
                 });
                 await Promise.all(languagePromises);
+                
+                // CRITICAL: Load movies ONCE after ALL languages complete
+                // This ensures we don't overwrite movies from previous language completions
+                if (allLanguageMovies.length > 0) {
+                  const beforeFilter = allLanguageMovies.length;
+                  const afterFilter = filterMovies(allLanguageMovies, prefsToUse, seed);
+                  const finalFiltered = applyMoviesLimit(afterFilter);
+                  console.log(`🎯 Final filtering: ${beforeFilter} total → ${afterFilter.length} after filterMovies → ${finalFiltered.length} after limit`);
+                  console.log(`✅ Language streaming complete: Loading ${finalFiltered.length} movies (from ${allLanguageMovies.length} total)`);
+                  
+                  if (finalFiltered.length > 0) {
+                    useStore.getState().loadMovies(finalFiltered);
+                    // Verify what was actually loaded
+                    setTimeout(() => {
+                      const loaded = useStore.getState().movies.length;
+                      console.log(`   ✅ Verified loaded into store: ${loaded} movies`);
+                      if (loaded !== finalFiltered.length) {
+                        console.error(`   ❌ MISMATCH: Expected ${finalFiltered.length} but store has ${loaded}`);
+                      }
+                    }, 100);
+                  } else {
+                    console.error(`❌ ERROR: After filtering ${allLanguageMovies.length} movies, 0 remain!`);
+                    console.error(`   Preferences used:`, prefsToUse);
+                    console.error(`   This suggests filterMovies is too strict`);
+                    setLoadError(`🎞 No movies found matching your preferences. Try selecting different filters.`);
+                  }
+                } else {
+                  console.error(`❌ No movies fetched from any language stream`);
+                  setLoadError(`🎞 Could not fetch movies. Please try again or select different languages.`);
+                }
               })();
               return;
             }
@@ -454,6 +492,7 @@ export default function Home() {
                 imdbTop250Movies: prefsToUse.imdbTop250Movies,
                 moodIncludeGenres: prefsToUse.moodIncludeGenres,
                 moodExcludeGenres: prefsToUse.moodExcludeGenres,
+                moodPreset: prefsToUse.moodPreset,
               }, onProgress);
             } catch (error: any) {
               // Don't show error for IMDb Top 250 - it will fall back to regular movies
@@ -889,10 +928,17 @@ export default function Home() {
             }
           }
           
+          // CRITICAL: Check for mood cards FIRST - they should bypass all language streaming
+          // Mood cards are pre-curated and should be loaded directly without any filtering
+          if (prefsToUse.moodPreset) {
+            console.log('🎬 Mood card selected - bypassing language streaming, using fetchFilteredMovies');
+            // Fall through to fetchFilteredMovies which handles mood cards correctly
+          }
           // Hard language-only path for dual/unified - stream ALL pages
           // IMPORTANT: This handles the OR logic for multiple languages (Hindi + Tamil)
           // CRITICAL: Validate that prefsToUse has languages before streaming
-          if ((prefsToUse.languages?.length ?? 0) > 0 &&
+          // BUT: Skip this if mood card is selected (mood cards should use fetchFilteredMovies)
+          else if ((prefsToUse.languages?.length ?? 0) > 0 &&
               (prefsToUse.genres?.length ?? 0) === 0 &&
               (prefsToUse.ottPlatforms?.length ?? 0) === 0) {
             // Double-check for dual mode that we have valid combinedPreferences
@@ -962,16 +1008,12 @@ export default function Home() {
                       allLanguageMovies = [...allLanguageMovies, ...newMovies];
                       console.log(`📊 Total unique movies after ${lang}: ${allLanguageMovies.length}`);
                       
-                      // Final completion: always replace with final filtered set
+                      // Final completion: DON'T load movies here - wait for ALL languages to complete
+                      // Each language stream completing will overwrite the previous one
+                      // We'll load movies once after ALL languages complete (see line ~1006)
                       if (isComplete) {
-                        const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
-                        console.log(`✅ Final completion for ${lang}. Total movies: ${allLanguageMovies.length}`);
-                        console.log(`🎯 Final filtered count for ${lang}: ${finalFiltered.length} (from ${allLanguageMovies.length} total)`);
-                        if (finalFiltered.length > 0) {
-                          useStore.getState().loadMovies(finalFiltered);
-                        } else {
-                          console.warn(`⚠️ After filtering ${allLanguageMovies.length} movies from ${lang}, 0 remain`);
-                        }
+                        console.log(`✅ Language ${lang} stream completed. Total movies so far: ${allLanguageMovies.length}`);
+                        // Don't load movies here - wait for all languages to complete
                       } else {
                         // During progressive loading: only update if we have no movies yet
                         // Don't append during streaming to avoid accumulation issues
@@ -994,28 +1036,34 @@ export default function Home() {
                 await Promise.all(languagePromises);
                 console.log(`✅✅✅ ALL LANGUAGES COMPLETE! Total movies fetched: ${allLanguageMovies.length}`);
                 
-                // Final check - ensure movies are loaded
-                const finalMovies = useStore.getState().movies;
-                if (finalMovies.length === 0) {
-                  if (allLanguageMovies.length > 0) {
-                    console.warn(`⚠️ Movies were fetched (${allLanguageMovies.length}) but not loaded. Attempting final load...`);
-                    const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
-                    console.log(`🎯 Final filtered count: ${finalFiltered.length} (from ${allLanguageMovies.length} total)`);
-                    if (finalFiltered.length > 0) {
-                      useStore.getState().loadMovies(finalFiltered);
-                      console.log(`✅ Successfully loaded ${finalFiltered.length} movies`);
-                    } else {
-                      console.error(`❌ ERROR: After filtering ${allLanguageMovies.length} movies, 0 remain!`);
-                      console.error(`   Preferences used:`, prefsToUse);
-                      console.error(`   This suggests filterMovies is too strict`);
-                      setLoadError(`🎞 No movies found matching your preferences. Try selecting different filters.`);
-                    }
+                // CRITICAL: Load movies ONCE after ALL languages complete
+                // This ensures we don't overwrite movies from previous language completions
+                if (allLanguageMovies.length > 0) {
+                  const beforeFilter = allLanguageMovies.length;
+                  const afterFilter = filterMovies(allLanguageMovies, prefsToUse, seed);
+                  const finalFiltered = applyMoviesLimit(afterFilter);
+                  console.log(`🎯 Final filtering: ${beforeFilter} total → ${afterFilter.length} after filterMovies → ${finalFiltered.length} after limit`);
+                  console.log(`✅ Language streaming complete: Loading ${finalFiltered.length} movies (from ${allLanguageMovies.length} total)`);
+                  
+                  if (finalFiltered.length > 0) {
+                    useStore.getState().loadMovies(finalFiltered);
+                    // Verify what was actually loaded
+                    setTimeout(() => {
+                      const loaded = useStore.getState().movies.length;
+                      console.log(`   ✅ Verified loaded into store: ${loaded} movies`);
+                      if (loaded !== finalFiltered.length) {
+                        console.error(`   ❌ MISMATCH: Expected ${finalFiltered.length} but store has ${loaded}`);
+                      }
+                    }, 100);
                   } else {
-                    console.error(`❌ No movies fetched from any language stream`);
-                    setLoadError(`🎞 Could not fetch movies. Please try again or select different languages.`);
+                    console.error(`❌ ERROR: After filtering ${allLanguageMovies.length} movies, 0 remain!`);
+                    console.error(`   Preferences used:`, prefsToUse);
+                    console.error(`   This suggests filterMovies is too strict`);
+                    setLoadError(`🎞 No movies found matching your preferences. Try selecting different filters.`);
                   }
                 } else {
-                  console.log(`✅ Movies successfully loaded: ${finalMovies.length}`);
+                  console.error(`❌ No movies fetched from any language stream`);
+                  setLoadError(`🎞 Could not fetch movies. Please try again or select different languages.`);
                 }
               } catch (error) {
                 console.error('❌ Error in language streaming:', error);
@@ -1046,6 +1094,32 @@ export default function Home() {
             });
             if (newMovies.length > 0) {
               accumulatedMovies = [...accumulatedMovies, ...newMovies];
+            }
+            
+            // CRITICAL: For mood cards, skip all filtering in onProgress callback
+            // The movies from mood cards are already curated and should be used as-is
+            if (prefsToUse.moodPreset) {
+              console.log(`🎬 Mood card onProgress: Received ${m.length} movies, skipping filtering`);
+              console.log(`   Mood preset: ${prefsToUse.moodPreset}`);
+              console.log(`   isComplete: ${isComplete}`);
+              console.log(`   First 5 movie IDs: ${m.slice(0, 5).map(movie => movie.id).join(', ')}`);
+              
+              if (isComplete) {
+                // For mood cards, just use the movies directly without any filtering
+                // Don't accumulate - mood cards come all at once
+                console.log(`✅ Mood card loading complete: Loading all ${m.length} movies (no filtering, no accumulation)`);
+                if (m.length !== 100) {
+                  console.warn(`   ⚠️ WARNING: Expected 100 movies for mood card, but received ${m.length}`);
+                }
+                useStore.getState().loadMovies(m);
+                const loadedCount = useStore.getState().movies.length;
+                console.log(`   ✅ Verified: ${loadedCount} movies now in store`);
+                return;
+              }
+              // For mood cards, don't accumulate during progressive loading either
+              // They should come all at once with isComplete=true
+              console.log(`   ⚠️ Mood card received incomplete batch (should not happen)`);
+              return;
             }
             
             // Apply filters - only relax genres/OTT if user didn't select them
@@ -1083,6 +1157,7 @@ export default function Home() {
               imdbTop250Movies: prefsToUse.imdbTop250Movies,
               moodIncludeGenres: prefsToUse.moodIncludeGenres,
               moodExcludeGenres: prefsToUse.moodExcludeGenres,
+              moodPreset: prefsToUse.moodPreset,
             }, onProgress);
           } catch (error: any) {
             // Don't show error for IMDb Top 250 - it will fall back to regular movies
@@ -1116,22 +1191,83 @@ export default function Home() {
           console.log('🎥 First 5 movies BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.title));
           console.log('🎥 First 5 movie IDs BEFORE shuffle:', fetchedMovies.slice(0, 5).map(m => m.id));
           
-          // Only relax genres/OTT if user didn't select them
-          const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0 &&
-                                (prefsToUse.genres?.length ?? 0) === 0 &&
-                                (prefsToUse.ottPlatforms?.length ?? 0) === 0)
-            ? { ...prefsToUse, genres: [], ottPlatforms: [] } as any
-            : prefsToUse;
-          let filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
-          if (prefsToUse.languages?.length > 0 &&
-              (prefsToUse.genres?.length ?? 0) === 0 &&
-              (prefsToUse.ottPlatforms?.length ?? 0) === 0 &&
-              filtered.length < 20) {
-            filtered = filterMovies(fetchedMovies, {
-              ...prefsToUse,
-              genres: [],
-              ottPlatforms: []
-            }, seed);
+          // If mood preset is selected, skip ALL filtering - mood cards are already curated
+          // Just shuffle with seed for consistency (for dual mode)
+          let filtered: Movie[];
+          if (prefsToUse.moodPreset) {
+            console.log(`🎬 Mood preset ${prefsToUse.moodPreset} selected - bypassing filterMovies, only shuffling`);
+            console.log(`   Movies before shuffle: ${fetchedMovies.length}`);
+
+            // Safety net: if we somehow got an incomplete or low-rated deck, refetch directly from Supabase
+            const hasLowRated = fetchedMovies.some(m => (typeof m.rating === 'number' ? m.rating : 0) < 7);
+            if (fetchedMovies.length !== 100 || hasLowRated) {
+              console.warn('⚠️ Mood deck looks wrong. Forcing Supabase card fetch.', {
+                count: fetchedMovies.length,
+                hasLowRated,
+                firstIds: fetchedMovies.slice(0, 5).map(m => m.id)
+              });
+              try {
+                const card = await movieCardService.getMovieCard(prefsToUse.moodPreset);
+                const supaMovies = (card?.movies as Movie[]) || [];
+                const safeMovies = supaMovies.filter(m => (typeof m.rating === 'number' ? m.rating : 0) >= 7);
+                if (safeMovies.length > 0) {
+                  console.log(`✅ Loaded ${safeMovies.length} movies from Supabase card after fallback`);
+                  useStore.getState().loadMovies(safeMovies);
+                  setIsLoadingMovies(false);
+                  return;
+                }
+              } catch (err) {
+                console.error('❌ Supabase mood card fallback failed:', err);
+              }
+            }
+
+            // For mood cards, completely bypass filterMovies to avoid any filtering
+            // Just shuffle directly using the same seeded random function
+            filtered = [...fetchedMovies]; // Create a copy
+            
+            // Sort by ID first for deterministic input (same as filterMovies does)
+            filtered.sort((a, b) => a.id.localeCompare(b.id));
+            
+            // Shuffle with seed if provided (for dual mode consistency)
+            if (seed !== undefined) {
+              // Seeded random number generator (same as in lib/movies.ts)
+              let value = seed;
+              const seededRandom = () => {
+                value = (value * 9301 + 49297) % 233280;
+                return value / 233280;
+              };
+              
+              for (let i = filtered.length - 1; i > 0; i--) {
+                const j = Math.floor(seededRandom() * (i + 1));
+                [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+              }
+            } else {
+              // Random shuffle for single mode
+              filtered = filtered.sort(() => Math.random() - 0.5);
+            }
+            
+            console.log(`   Movies after shuffle (should be same count): ${filtered.length}`);
+            if (filtered.length !== fetchedMovies.length) {
+              console.error(`   ⚠️ WARNING: Movie count changed from ${fetchedMovies.length} to ${filtered.length}!`);
+            }
+          } else {
+            // Only relax genres/OTT if user didn't select them
+            const relaxedFinal = (prefsToUse.languages && prefsToUse.languages.length > 0 &&
+                                  (prefsToUse.genres?.length ?? 0) === 0 &&
+                                  (prefsToUse.ottPlatforms?.length ?? 0) === 0)
+              ? { ...prefsToUse, genres: [], ottPlatforms: [] } as any
+              : prefsToUse;
+            filtered = filterMovies(fetchedMovies, relaxedFinal, seed);
+            if (prefsToUse.languages?.length > 0 &&
+                (prefsToUse.genres?.length ?? 0) === 0 &&
+                (prefsToUse.ottPlatforms?.length ?? 0) === 0 &&
+                filtered.length < 20) {
+              filtered = filterMovies(fetchedMovies, {
+                ...prefsToUse,
+                genres: [],
+                ottPlatforms: []
+              }, seed);
+            }
           }
           console.log('🎯 Filtered/shuffled movies:', filtered.length);
           console.log('🎥 First 5 movies AFTER shuffle:', filtered.slice(0, 5).map(m => m.title));
@@ -1164,8 +1300,32 @@ export default function Home() {
           console.log('   First 5 titles:', filtered.slice(0, 5).map(m => m.title));
           console.log('   First 5 IDs:', filtered.slice(0, 5).map(m => m.id));
           
+          // CRITICAL: For mood cards, skip the final loadMovies call
+          // The onProgress callback already loaded the correct movies (100) without filtering
+          // Calling loadMovies again here would overwrite with the filtered array (58 movies)
+          if (prefsToUse.moodPreset) {
+            console.log(`🎬 Mood card detected: Skipping final loadMovies call`);
+            console.log(`   Movies were already loaded via onProgress callback`);
+            console.log(`   Current movies in store: ${useStore.getState().movies.length}`);
+            console.log(`   Filtered array has ${filtered.length} movies (would overwrite if loaded)`);
+            // Don't call loadMovies - onProgress already handled it correctly
+            setIsLoadingMovies(false);
+            return;
+          }
+          
           // Apply maximum limit to prevent performance issues
+          // NOTE: For mood cards, this should not limit since we have exactly 100 movies
+          const beforeLimit = filtered.length;
           filtered = applyMoviesLimit(filtered);
+          if (beforeLimit !== filtered.length && prefsToUse.moodPreset) {
+            console.warn(`   ⚠️ WARNING: applyMoviesLimit reduced movies from ${beforeLimit} to ${filtered.length} for mood card!`);
+          }
+          
+          // Defensive check: Log movie count before loading
+          console.log(`📊 About to load ${filtered.length} movies into store`);
+          if (prefsToUse.moodPreset && filtered.length !== 100) {
+            console.warn(`   ⚠️ WARNING: Mood card should have 100 movies, but filtered array has ${filtered.length}`);
+          }
           
           if (filtered.length === 0) {
             console.warn('No movies available after fetch/filter (dual/single unified). Showing error.');
