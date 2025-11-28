@@ -16,6 +16,63 @@ import LoadingScreen from './components/LoadingScreen';
 import SwipeDeck from './components/SwipeDeck';
 import ShortlistScreen from './components/ShortlistScreen';
 
+// Initial batch size and pagination threshold
+const INITIAL_MOVIES_LIMIT = 100;
+const PAGINATION_THRESHOLD = 50; // Load more when user reaches this index
+const PAGINATION_BATCH_SIZE = 100; // Load this many more movies
+
+// Apply initial limit to movies array and log if limiting occurred
+function applyMoviesLimit(movies: Movie[]): Movie[] {
+  if (movies.length > INITIAL_MOVIES_LIMIT) {
+    console.log(`📦 Limiting initial batch to ${INITIAL_MOVIES_LIMIT} movies (${movies.length} total available).`);
+    return movies.slice(0, INITIAL_MOVIES_LIMIT);
+  }
+  return movies;
+}
+
+// Minimize movie objects for storage to reduce payload size
+// Removes large fields (synopsis, runtime) that aren't critical for matching/display
+function minimizeMoviesForStorage(movies: Movie[]): Partial<Movie>[] {
+  return movies.map(movie => ({
+    id: movie.id,
+    title: movie.title,
+    year: movie.year,
+    rating: movie.rating,
+    genres: movie.genres,
+    ott: movie.ott,
+    poster_url: movie.poster_url,
+    adult: movie.adult,
+    original_language: movie.original_language,
+    // Omit: synopsis (large text field), runtime (not critical)
+  }));
+}
+
+// Restore minimized movies to full Movie objects (with defaults for missing fields)
+// Also handles full movie objects for backward compatibility
+function restoreMoviesFromStorage(movies: Partial<Movie>[] | Movie[]): Movie[] {
+  return movies.map(movie => {
+    // Check if this is already a full movie object (has synopsis and runtime)
+    if ('synopsis' in movie && 'runtime' in movie && movie.synopsis && movie.runtime) {
+      return movie as Movie; // Already full, return as-is
+    }
+    
+    // Otherwise, restore from minimized format
+    return {
+      id: movie.id!,
+      title: movie.title!,
+      year: movie.year!,
+      runtime: movie.runtime || 0, // Default runtime if missing
+      rating: movie.rating!,
+      genres: movie.genres || [],
+      ott: movie.ott || [],
+      poster_url: movie.poster_url || '',
+      synopsis: movie.synopsis || '', // Empty synopsis if missing
+      adult: movie.adult,
+      original_language: movie.original_language,
+    };
+  });
+}
+
 export default function Home() {
   const currentScreen = useStore((state) => state.currentScreen);
   const setCurrentScreen = useStore((state) => state.setCurrentScreen);
@@ -27,6 +84,7 @@ export default function Home() {
   const [isLoadingMovies, setIsLoadingMovies] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingElapsed, setLoadingElapsed] = useState(0); // Force re-render to check elapsed time
+  const [isMoodCardLoad, setIsMoodCardLoad] = useState(false); // Track if loading from mood card (bypass min time)
   const lastSavedDeckRef = useRef<string>(''); // Track last saved deck to prevent duplicate saves
   const [loadingQuote] = useState(() => {
     const LOADING_QUOTES = [
@@ -82,6 +140,7 @@ export default function Home() {
       hasLoadedMovies.current = false;
       setIsLoadingMovies(false);
       setLoadError(null);
+      setIsMoodCardLoad(false);
       loadingStartTime.current = null;
       minimumLoadingStartTime.current = null;
       setLoadingElapsed(0);
@@ -134,12 +193,24 @@ export default function Home() {
         console.log('   Combined languages:', session.combinedPreferences.languages);
         console.log('   Deck size:', movies.length);
         console.log('   Session ID:', sessionId);
+        console.log('   First 5 movie IDs (preserving exact order):', movies.slice(0, 5).map(m => m.id));
+        
+        // CRITICAL: Preserve exact order as-is - don't re-sort or re-shuffle
+        // The movies are already in the correct shuffled/filtered order from filterMovies
+        // Both users must see movies in the exact same sequence
+        
+        // Minimize movies to reduce payload size (remove synopsis, runtime)
+        const minimizedMovies = minimizeMoviesForStorage(movies);
+        const originalSize = JSON.stringify(movies).length;
+        const minimizedSize = JSON.stringify(minimizedMovies).length;
+        const sizeReduction = ((1 - minimizedSize / originalSize) * 100).toFixed(1);
+        console.log(`   Payload optimization: ${originalSize} bytes → ${minimizedSize} bytes (${sizeReduction}% reduction)`);
         
         sessionService.updateSession(sessionId, {
-          movie_deck: movies
+          movie_deck: minimizedMovies
         }).then(() => {
           lastSavedDeckRef.current = deckHash;
-          console.log('✅ CREATOR: Movie deck auto-saved to Supabase:', {
+          console.log('✅ CREATOR: Movie deck auto-saved to Supabase (preserving exact order):', {
             movieCount: movies.length,
             firstFive: movies.slice(0, 5).map(m => ({ title: m.title, id: m.id }))
           });
@@ -181,13 +252,26 @@ export default function Home() {
     if (shouldLoad) {
       hasLoadedMovies.current = true; // Prevent re-runs
       loadingStartTime.current = Date.now(); // Track when loading started
-      minimumLoadingStartTime.current = Date.now(); // Track when minimum loading period started
+      
+      // Check if this is a mood card load - if so, don't enforce minimum loading time
+      const isMoodCard = !!preferences.moodPreset;
+      setIsMoodCardLoad(isMoodCard);
+      
+      // Only set minimum loading time for non-mood-card loads
+      if (!isMoodCard) {
+        minimumLoadingStartTime.current = Date.now(); // Track when minimum loading period started
+      } else {
+        minimumLoadingStartTime.current = null; // No minimum for mood cards
+        console.log('🎬 Mood card detected - bypassing minimum loading time');
+      }
+      
         console.log('=== LOADING MOVIES FOR SWIPE SCREEN ===');
           console.log('Session mode:', session?.mode || 'single (no session)');
           console.log('Combined preferences:', session?.combinedPreferences);
           console.log('Individual preferences:', preferences);
           console.log('Session seed:', session?.seed);
           console.log('Current movies count:', movies.length);
+          console.log('Is mood card load:', isMoodCard);
         
         setIsLoadingMovies(true);
       
@@ -280,20 +364,21 @@ export default function Home() {
                         return true;
                       });
                       allLanguageMovies = [...allLanguageMovies, ...newMovies];
-                      const filtered = filterMovies(allLanguageMovies, prefsToUse, seed);
-                      const appendMoviesFn = useStore.getState().appendMovies;
-                      const currentMovies = useStore.getState().movies;
-                      if (currentMovies.length === 0 && filtered.length > 0) {
-                        useStore.getState().loadMovies(filtered);
-                      } else if (filtered.length > currentMovies.length) {
-                        const currentIds = new Set(currentMovies.map(m => m.id));
-                        const newMovies = filtered.filter(m => !currentIds.has(m.id));
-                        if (newMovies.length > 0) appendMoviesFn(newMovies);
-                      }
-                      // Final completion: refresh deck
+                      const filtered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
+                      
+                      // Final completion: always replace with final filtered set
                       if (isComplete) {
-                        const finalFiltered = filterMovies(allLanguageMovies, prefsToUse, seed);
+                        const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
+                        console.log(`✅ Language streaming complete: Loading ${finalFiltered.length} movies (from ${allLanguageMovies.length} total)`);
                         useStore.getState().loadMovies(finalFiltered);
+                      } else {
+                        // During progressive loading: only update if we have no movies yet
+                        // Don't append during streaming to avoid accumulation issues
+                        const currentMovies = useStore.getState().movies;
+                        if (currentMovies.length === 0 && filtered.length > 0) {
+                          console.log(`📥 Progressive load: Showing ${filtered.length} movies (${allLanguageMovies.length} total so far)`);
+                          useStore.getState().loadMovies(filtered);
+                        }
                       }
                     }
                   });
@@ -338,27 +423,23 @@ export default function Home() {
                                    (prefsToUse.ottPlatforms?.length ?? 0) === 0)
                 ? { ...prefsToUse, genres: [], ottPlatforms: [] } as any
                 : prefsToUse;
-              const filtered = filterMovies(accumulatedMovies, langRelaxed, seed);
-              
-              // Update deck incrementally: load initial, append after
-              const currentMovies = useStore.getState().movies;
-              const currentIds = new Set(currentMovies.map(m => m.id));
-              
-              if (currentMovies.length === 0 && filtered.length > 0) {
-                // Initial load
-                useStore.getState().loadMovies(filtered);
-              } else if (filtered.length > currentMovies.length) {
-                // Append only truly new movies using Set for O(1) lookup
-                const newMovies = filtered.filter(m => !currentIds.has(m.id));
-                if (newMovies.length > 0) {
-                  useStore.getState().appendMovies(newMovies);
-                }
-              }
-              
-              // On final completion, do a full refresh to ensure all filters are applied correctly
+              // On final completion, always replace with final filtered set
               if (isComplete) {
-                const finalFiltered = filterMovies(accumulatedMovies, langRelaxed, seed);
+                const finalFiltered = applyMoviesLimit(filterMovies(accumulatedMovies, langRelaxed, seed));
+                console.log(`✅ Progressive loading complete: Loading ${finalFiltered.length} movies (from ${accumulatedMovies.length} total)`);
                 useStore.getState().loadMovies(finalFiltered);
+                setIsLoadingMovies(false); // Ensure loading stops on completion
+              } else {
+                // During progressive loading: only update if we have no movies yet
+                // Don't append during streaming to avoid accumulation issues
+                const currentMovies = useStore.getState().movies;
+                if (currentMovies.length === 0) {
+                  const filtered = applyMoviesLimit(filterMovies(accumulatedMovies, langRelaxed, seed));
+                  if (filtered.length > 0) {
+                    console.log(`📥 Progressive load: Showing ${filtered.length} movies (${accumulatedMovies.length} total so far)`);
+                    useStore.getState().loadMovies(filtered);
+                  }
+                }
               }
             };
             let fetchedMovies: Movie[] = [];
@@ -427,6 +508,7 @@ export default function Home() {
             }
             console.log('🎯 Filtered/shuffled movies:', filtered.length);
             console.log('📋 Loading movies into state');
+            filtered = applyMoviesLimit(filtered);
             if (filtered.length === 0) {
               console.warn('No movies available after fetch/filter. Showing error.');
               setLoadError('No movies available right now. Please try again in a moment.');
@@ -528,7 +610,8 @@ export default function Home() {
                 if (initialCheck.movie_deck && initialCheck.movie_deck.length > 0) {
                   console.log('✅ JOINER: Deck already exists! Loading immediately');
                   console.log('📊 Deck size:', initialCheck.movie_deck.length, 'movies');
-                  loadMovies(initialCheck.movie_deck);
+                  const restoredMovies = restoreMoviesFromStorage(initialCheck.movie_deck);
+                  loadMovies(restoredMovies);
                   setIsLoadingMovies(false);
                   return;
                 }
@@ -571,7 +654,12 @@ export default function Home() {
                       console.log('✅ Verifying deck matches combined languages:', sessionState.combinedPreferences.languages);
                     }
                     
-                    loadMovies(dbSession.movie_deck);
+                    // CRITICAL: Load deck exactly as saved - don't re-filter or re-shuffle
+                    // Both users must see movies in the exact same sequence and count
+                    const restoredMovies = restoreMoviesFromStorage(dbSession.movie_deck);
+                    console.log('   Loaded count:', restoredMovies.length);
+                    console.log('   First 5 movie IDs after restore:', restoredMovies.slice(0, 5).map(m => m.id));
+                    loadMovies(restoredMovies); // Load without any filtering/shuffling
                     setIsLoadingMovies(false);
                     return;
                   }
@@ -612,7 +700,12 @@ export default function Home() {
                     console.log('📊 Deck size:', dbSession.movie_deck.length, 'movies');
                     console.log('🎥 First 5 movies:', dbSession.movie_deck.slice(0, 5).map((m: any) => ({ title: m.title, id: m.id })));
                     console.log('🎥 First 5 movie IDs:', dbSession.movie_deck.slice(0, 5).map((m: any) => m.id));
-                    loadMovies(dbSession.movie_deck);
+                    // CRITICAL: Load deck exactly as saved - don't re-filter or re-shuffle
+                    // Both users must see movies in the exact same sequence and count
+                    const restoredMovies = restoreMoviesFromStorage(dbSession.movie_deck);
+                    console.log('   Loaded count:', restoredMovies.length);
+                    console.log('   First 5 movie IDs after restore:', restoredMovies.slice(0, 5).map(m => m.id));
+                    loadMovies(restoredMovies); // Load without any filtering/shuffling
                     setIsLoadingMovies(false);
                     return;
                   } else {
@@ -869,30 +962,24 @@ export default function Home() {
                       allLanguageMovies = [...allLanguageMovies, ...newMovies];
                       console.log(`📊 Total unique movies after ${lang}: ${allLanguageMovies.length}`);
                       
-                      const filtered = filterMovies(allLanguageMovies, prefsToUse, seed);
-                      console.log(`🎯 Filtered movies after ${lang}: ${filtered.length} (from ${allLanguageMovies.length} total)`);
-                      
-                      const currentMovies = useStore.getState().movies;
-                      const currentIds = new Set(currentMovies.map(m => m.id));
-                      if (currentMovies.length === 0 && filtered.length > 0) {
-                        console.log(`✅ Loading initial ${filtered.length} movies`);
-                        useStore.getState().loadMovies(filtered);
-                      } else if (filtered.length > currentMovies.length) {
-                        const newFiltered = filtered.filter(m => !currentIds.has(m.id));
-                        if (newFiltered.length > 0) {
-                          console.log(`✅ Appending ${newFiltered.length} new movies`);
-                          useStore.getState().appendMovies(newFiltered);
-                        }
-                      }
-                      // Final completion: refresh deck
+                      // Final completion: always replace with final filtered set
                       if (isComplete) {
+                        const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
                         console.log(`✅ Final completion for ${lang}. Total movies: ${allLanguageMovies.length}`);
-                        const finalFiltered = filterMovies(allLanguageMovies, prefsToUse, seed);
                         console.log(`🎯 Final filtered count for ${lang}: ${finalFiltered.length} (from ${allLanguageMovies.length} total)`);
                         if (finalFiltered.length > 0) {
                           useStore.getState().loadMovies(finalFiltered);
                         } else {
                           console.warn(`⚠️ After filtering ${allLanguageMovies.length} movies from ${lang}, 0 remain`);
+                        }
+                      } else {
+                        // During progressive loading: only update if we have no movies yet
+                        // Don't append during streaming to avoid accumulation issues
+                        const filtered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
+                        const currentMovies = useStore.getState().movies;
+                        if (currentMovies.length === 0 && filtered.length > 0) {
+                          console.log(`📥 Progressive load for ${lang}: Showing ${filtered.length} movies (${allLanguageMovies.length} total so far)`);
+                          useStore.getState().loadMovies(filtered);
                         }
                       }
                     } else if (isComplete) {
@@ -912,7 +999,7 @@ export default function Home() {
                 if (finalMovies.length === 0) {
                   if (allLanguageMovies.length > 0) {
                     console.warn(`⚠️ Movies were fetched (${allLanguageMovies.length}) but not loaded. Attempting final load...`);
-                    const finalFiltered = filterMovies(allLanguageMovies, prefsToUse, seed);
+                    const finalFiltered = applyMoviesLimit(filterMovies(allLanguageMovies, prefsToUse, seed));
                     console.log(`🎯 Final filtered count: ${finalFiltered.length} (from ${allLanguageMovies.length} total)`);
                     if (finalFiltered.length > 0) {
                       useStore.getState().loadMovies(finalFiltered);
@@ -969,23 +1056,19 @@ export default function Home() {
               : prefsToUse;
             const filtered = filterMovies(accumulatedMovies, langRelaxed, seed);
             
-            // Update deck incrementally - use Set for O(1) lookups
-            const currentMovies = useStore.getState().movies;
-            const currentIds = new Set(currentMovies.map(m => m.id));
-            
-            if (currentMovies.length === 0 && filtered.length > 0) {
-              useStore.getState().loadMovies(filtered);
-            } else if (filtered.length > currentMovies.length) {
-              const newMovies = filtered.filter(m => !currentIds.has(m.id));
-              if (newMovies.length > 0) {
-                useStore.getState().appendMovies(newMovies);
-              }
-            }
-            
-            // On final completion, do full refresh
+            // On final completion, always replace with final filtered set
             if (isComplete) {
-              const finalFiltered = filterMovies(accumulatedMovies, langRelaxed, seed);
+              const finalFiltered = applyMoviesLimit(filterMovies(accumulatedMovies, langRelaxed, seed));
+              console.log(`✅ Progressive loading complete: Loading ${finalFiltered.length} movies (from ${accumulatedMovies.length} total)`);
               useStore.getState().loadMovies(finalFiltered);
+            } else {
+              // During progressive loading: only update if we have no movies yet
+              // Don't append during streaming to avoid accumulation issues
+              const currentMovies = useStore.getState().movies;
+              if (currentMovies.length === 0 && filtered.length > 0) {
+                console.log(`📥 Progressive load: Showing ${filtered.length} movies (${accumulatedMovies.length} total so far)`);
+                useStore.getState().loadMovies(filtered);
+              }
             }
           };
           let fetchedMovies: Movie[] = [];
@@ -1077,9 +1160,13 @@ export default function Home() {
           }
           
           console.log('📋 Loading movies into state - Final movie list:');
-          console.log('   Total:', filtered.length);
+          console.log('   Total before limit:', filtered.length);
           console.log('   First 5 titles:', filtered.slice(0, 5).map(m => m.title));
           console.log('   First 5 IDs:', filtered.slice(0, 5).map(m => m.id));
+          
+          // Apply maximum limit to prevent performance issues
+          filtered = applyMoviesLimit(filtered);
+          
           if (filtered.length === 0) {
             console.warn('No movies available after fetch/filter (dual/single unified). Showing error.');
             setLoadError('No movies available right now. Please try again in a moment.');
@@ -1165,11 +1252,17 @@ export default function Home() {
       }
       
       // Show loading screen for minimum 5 seconds, or until we have at least 7 movies OR 10 seconds have passed
+      // EXCEPTION: For mood cards, skip minimum time and show movies immediately
       const timeSinceStart = loadingStartTime.current ? Date.now() - loadingStartTime.current : 0;
       const timeSinceMinimumStart = minimumLoadingStartTime.current ? Date.now() - minimumLoadingStartTime.current : 0;
       const hasEnoughMovies = movies.length >= 7;
       const hasWaitedLongEnough = timeSinceStart >= 10000; // 10 seconds max wait
-      const hasMetMinimumTime = timeSinceMinimumStart >= 5000; // 5 seconds minimum
+      
+      // For mood cards, skip minimum time requirement
+      const hasMetMinimumTime = isMoodCardLoad 
+        ? true // Always met for mood cards (bypass minimum)
+        : (timeSinceMinimumStart >= 5000); // 5 seconds minimum for regular loads
+      
       const shouldShowLoading = !hasMetMinimumTime || isLoadingMovies || (!hasEnoughMovies && !hasWaitedLongEnough);
       
       // Log condition for debugging (dev only)

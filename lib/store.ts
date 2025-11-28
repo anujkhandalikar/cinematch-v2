@@ -377,7 +377,11 @@ export const useStore = create<AppState>((set) => ({
                            error?.message?.includes('Missing Supabase API key') ||
                            error?.message?.includes('Supabase API key is missing');
 
-      const log = isTableNotFound || isApiKeyError ? console.warn : console.error;
+      const isTimeoutError = error?.code === 'TIMEOUT' ||
+                            error?.isTimeout ||
+                            error?.message?.includes('timed out');
+
+      const log = (isTableNotFound || isApiKeyError || isTimeoutError) ? console.warn : console.error;
       const prefix = isTableNotFound || isApiKeyError ? '⚠️ createSupabaseSession: Expected Supabase configuration issue' : '❌ createSupabaseSession: Error caught';
 
       log(prefix);
@@ -388,8 +392,11 @@ export const useStore = create<AppState>((set) => ({
       log('   Error details:', error?.details);
       log('   Error hint:', error?.hint);
 
-      if (isTableNotFound || isApiKeyError) {
-        const errorType = isApiKeyError ? 'API key' : 'Table not found';
+      if (isTableNotFound || isApiKeyError || isTimeoutError) {
+        let errorType = 'Unknown';
+        if (isTimeoutError) errorType = 'Timeout';
+        else if (isApiKeyError) errorType = 'API key';
+        else if (isTableNotFound) errorType = 'Table not found';
         console.warn(`⚠️ ${errorType} error - will use fallback`);
         throw error;
       }
@@ -491,10 +498,23 @@ export const useStore = create<AppState>((set) => ({
                              error?.message?.includes('Table not found') ||
                              error?.code === 'PGRST205' ||
                              error?.message?.includes('Could not find the table');
+
+      const isApiKeyError = error?.isMissingApiKey ||
+                           error?.isInvalidApiKey ||
+                           error?.code === 'MISSING_API_KEY' ||
+                           error?.code === 'INVALID_API_KEY' ||
+                           error?.message?.includes('Invalid API key') ||
+                           error?.message?.includes('Invalid Supabase API key') ||
+                           error?.message?.includes('Missing Supabase API key') ||
+                           error?.message?.includes('Supabase API key is missing');
+
+      const isTimeoutError = error?.code === 'TIMEOUT' ||
+                            error?.isTimeout ||
+                            error?.message?.includes('timed out');
       
-      if (isTableNotFound) {
-        console.log('⚠️ Table not found - will use fallback');
-        // Silently fail - fallback will be used, no need to log
+      if (isTableNotFound || isApiKeyError || isTimeoutError) {
+        const errorType = isTimeoutError ? 'Timeout' : (isApiKeyError ? 'API key' : 'Table not found');
+        console.log(`⚠️ ${errorType} error - will use fallback`);
         throw error; // Re-throw so fallback can catch it
       }
       
@@ -593,11 +613,31 @@ export const useStore = create<AppState>((set) => ({
             console.log('🎉 JOINER: Movie deck detected via real-time subscription!');
             console.log('📊 Deck size:', newSession.movie_deck.length, 'movies');
             console.log('🎥 First 5 movies:', newSession.movie_deck.slice(0, 5).map((m: any) => ({ title: m.title, id: m.id })));
+            console.log('🎥 First 5 movie IDs (preserving exact order):', newSession.movie_deck.slice(0, 5).map((m: any) => m.id));
             
-            // Load movies immediately
+            // CRITICAL: Load deck exactly as saved - don't re-filter or re-shuffle
+            // Both users must see movies in the exact same sequence and count
+            
+            // Restore minimized movies (they may have synopsis/runtime missing)
+            // Check if movies are minimized (missing synopsis or runtime)
+            const isMinimized = newSession.movie_deck.some((m: any) => !m.synopsis || !m.runtime);
+            let moviesToLoad = newSession.movie_deck;
+            
+            if (isMinimized) {
+              // Restore minimized movies with defaults - preserve exact order
+              moviesToLoad = newSession.movie_deck.map((movie: any) => ({
+                ...movie,
+                runtime: movie.runtime || 0,
+                synopsis: movie.synopsis || '',
+              }));
+            }
+            
+            // Load movies immediately without any filtering or shuffling
+            // This ensures both users see the exact same sequence and count
             const { loadMovies } = useStore.getState();
-            loadMovies(newSession.movie_deck);
-            console.log('✅ JOINER: Movies loaded from real-time subscription');
+            loadMovies(moviesToLoad);
+            console.log('✅ JOINER: Movies loaded from real-time subscription (exact order preserved)');
+            console.log('   Loaded count:', moviesToLoad.length);
           }
           
           // Update session state with new preferences

@@ -7,9 +7,12 @@ This app now uses Supabase for real-time synchronization between devices, enabli
 ### Option 1: Using Supabase Dashboard (Recommended)
 
 1. Go to your [Supabase Dashboard](https://supabase.com/dashboard)
-2. Select your project (`nvsobyilytwdkrvbembu`)
+2. Select your project (`qvoqnaqyqsnpydmtskoz`)
 3. Navigate to **SQL Editor**
-4. Copy the contents of `supabase-schema.sql`
+4. Copy and execute the following schema files in order:
+   - `supabase-schema.sql` (sessions, movie_likes, mutual_matches tables)
+   - `supabase-schema-movies.sql` (movie_cards table)
+   - `supabase-schema-imdb.sql` (imdb_top250_movies table, optional)
 5. Paste and execute the SQL commands
 
 ### Option 2: Using Supabase CLI
@@ -21,7 +24,7 @@ If you have Supabase CLI installed:
 supabase init
 
 # Link to your remote project
-supabase link --project-ref nvsobyilytwdkrvbembu
+supabase link --project-ref qvoqnaqyqsnpydmtskoz
 
 # Push the schema
 supabase db push
@@ -52,6 +55,16 @@ supabase db push
 - Real-time updates via database triggers
 - Prevents duplicate matches
 
+#### Movie Cards Table
+- Stores 100 pre-fetched movies for each mood preset (LightFun, CriticallyAcclaimed, NewPopular, Bollywood)
+- Enables fast loading when users select a mood preset
+- Updated via populate script
+
+#### IMDb Top 250 Movies Table (Optional)
+- Stores pre-mapped IMDb Top 250 movies with full TMDB data
+- Used for CriticallyAcclaimed mood preset
+- Updated manually every 3 months
+
 ### Real-time Features
 
 1. **Session Creation/Joining**: Instant session creation and joining
@@ -79,9 +92,25 @@ supabase db push
 
 ## Environment Variables
 
-The app uses the following Supabase configuration:
-- **URL**: `https://nvsobyilytwdkrvbembu.supabase.co`
-- **Anon Key**: Already configured in `lib/supabase.ts`
+The app uses the following Supabase configuration (with defaults):
+- **URL**: `https://qvoqnaqyqsnpydmtskoz.supabase.co` (default, can be overridden)
+- **Anon Key**: Configured in `lib/supabase.ts` (default, can be overridden)
+
+### Optional: Override with Environment Variables
+
+Create a `.env.local` file in your project root to override defaults:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://qvoqnaqyqsnpydmtskoz.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+NEXT_PUBLIC_TMDB_API_KEY=your_tmdb_api_key_here
+```
+
+**To get your Supabase keys:**
+1. Go to: https://supabase.com/dashboard/project/qvoqnaqyqsnpydmtskoz/settings/api
+2. Copy:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon/public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 ## Testing Real-time Features
 

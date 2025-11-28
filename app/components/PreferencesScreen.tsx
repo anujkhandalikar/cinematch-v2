@@ -3,6 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useStore, Genre, OTTPlatform, Language, UserPreferences, MoodPreset } from '@/lib/store';
 import { trackEvent } from '@/lib/tracking';
+import { getMoodCardId } from '@/lib/movieCards';
+import { movieCardService } from '@/lib/supabase';
+import { getCachedMoodCard, setCachedMoodCard } from '@/lib/moodCardCache';
 
 const GENRES: Genre[] = [
   'Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary',
@@ -198,21 +201,25 @@ export default function PreferencesScreen() {
       });
     };
 
-    // Use a debounced scroll handler to avoid too many updates
-    let scrollTimeout: NodeJS.Timeout;
-    const debouncedHandleScroll = () => {
-      clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(handleScroll, 100);
+    // Use requestAnimationFrame for smooth, responsive updates
+    let rafId: number | null = null;
+    const rafHandleScroll = () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(handleScroll);
     };
 
-    carousel.addEventListener('scroll', debouncedHandleScroll, { passive: true });
+    carousel.addEventListener('scroll', rafHandleScroll, { passive: true });
     
     // Also check on mount to set initial state
     handleScroll();
 
     return () => {
-      carousel.removeEventListener('scroll', debouncedHandleScroll);
-      clearTimeout(scrollTimeout);
+      carousel.removeEventListener('scroll', rafHandleScroll);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
     };
   }, []);
 
@@ -222,6 +229,33 @@ export default function PreferencesScreen() {
       setFiltersBlurred(true);
     }
   }, [preferences.moodPreset]);
+
+  // Preload mood card when selected (background fetch for instant load later)
+  useEffect(() => {
+    if (selectedMood) {
+      const cardId = getMoodCardId({ moodPreset: selectedMood } as UserPreferences);
+      if (cardId) {
+        // Check if already cached
+        const cached = getCachedMoodCard(cardId);
+        if (!cached) {
+          // Preload in background - don't await, just start the fetch
+          console.log(`🚀 Preloading mood card: ${cardId}`);
+          movieCardService.getMovieCard(cardId)
+            .then((movieCard) => {
+              if (movieCard) {
+                setCachedMoodCard(cardId, movieCard);
+                console.log(`✅ Preloaded ${cardId} (${Array.isArray(movieCard.movies) ? movieCard.movies.length : 0} movies)`);
+              }
+            })
+            .catch((error) => {
+              console.warn(`⚠️ Failed to preload ${cardId}:`, error);
+            });
+        } else {
+          console.log(`⚡ ${cardId} already cached, skipping preload`);
+        }
+      }
+    }
+  }, [selectedMood]);
 
   const resetManualFilters = () => {
     setSelectedGenres([]);
@@ -443,15 +477,15 @@ export default function PreferencesScreen() {
 
           <header className="pt-2 mb-10 text-center sm:mb-12">
             <h1 className="mb-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl md:text-5xl" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
-              So, whats your mood like?
+              Pick a mood?
             </h1>
             <p className="text-base font-light italic text-white/70 md:text-lg">
-              Pick a mood — we’ll find the perfect movie for it.
+              We'll find the perfect movie for it.
             </p>
           </header>
 
           <section
-            className={`relative transition-all duration-500 ${
+            className={`relative transition-all duration-200 ${
               cardsBlurred ? 'scale-[0.98] blur-[1.5px]' : 'scale-100 blur-0'
             }`}
           >
@@ -484,14 +518,14 @@ export default function PreferencesScreen() {
                       type="button"
                       onClick={handleCardClick}
                       aria-pressed={!isInfoCard && selectedMood === card.key}
-                      className={`group relative flex snap-center flex-col overflow-visible rounded-3xl p-3 transition-transform duration-500 ease-in-out active:scale-[0.99] md:p-4 ${
+                      className={`group relative flex snap-center flex-col overflow-visible rounded-3xl p-3 transition-transform duration-200 ease-in-out active:scale-[0.99] md:p-4 ${
                         isCentered ? 'scale-100 opacity-100' : 'scale-[0.88] opacity-60'
                       }`}
                       style={{ scrollSnapAlign: 'center' }}
                     >
                       <div
                         data-mood-card
-                        className={`relative flex aspect-[3/4] min-w-[220px] flex-col justify-end overflow-visible rounded-2xl border transition-all duration-500 ease-in-out ${cardWidthClass} ${
+                        className={`relative flex aspect-[3/4] min-w-[220px] flex-col justify-end overflow-visible rounded-2xl border transition-all duration-200 ease-in-out ${cardWidthClass} ${
                           !isInfoCard && isSelected
                             ? 'border-red-600/80 shadow-[0_0_12px_rgba(255,0,0,0.55)]'
                             : 'border-white/10 hover:border-white/20 hover:shadow-[0_0_14px_rgba(255,0,0,0.2)]'
@@ -545,10 +579,10 @@ export default function PreferencesScreen() {
 
             <div
               ref={filtersRef}
-              className={`transform transition-all duration-500 ease-out ${
+              className={`transform transition-all duration-500 ease-out overflow-hidden ${
                 isFineTuneOpen
                   ? 'pointer-events-auto mt-6 max-h-[4000px] opacity-100 translate-y-0'
-                  : 'pointer-events-none max-h-0 opacity-0 -translate-y-4'
+                  : 'pointer-events-none max-h-0 mt-0 opacity-0 -translate-y-4'
               }`}
             >
               <div className="space-y-6 rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-[0_25px_45px_-25px_rgba(0,0,0,0.6)] backdrop-blur-sm">

@@ -20,7 +20,7 @@ export default function ReadyScreen() {
   // Subscribe to real-time updates when component mounts
   useEffect(() => {
     if (session?.supabaseSession) {
-      console.log('ReadyScreen: Setting up Supabase subscriptions');
+      console.log('ReadyScreen: Setting up Firebase subscriptions');
       subscribeToRealtimeUpdates();
       
       // Also refresh session state immediately to get latest data
@@ -39,7 +39,7 @@ export default function ReadyScreen() {
         unsubscribeFromRealtimeUpdates();
       };
     } else {
-      console.log('ReadyScreen: No Supabase session, using fallback mode');
+      console.log('ReadyScreen: No Firebase session, using fallback mode');
     }
   }, [session?.supabaseSession?.id, subscribeToRealtimeUpdates, refreshSessionState]);
 

@@ -7,10 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "populate-cards": "tsx scripts/populate-movie-cards.ts"
+    "populate-cards": "tsx scripts/populate-movie-cards.ts",
+    "verify-cards": "tsx scripts/verify-movie-cards.ts",
+    "check-tables": "tsx scripts/check-supabase-tables.ts",
+    "display-cards": "tsx scripts/display-movie-cards.ts",
+    "fix-zero-rated": "tsx scripts/fix-zero-rated-movies.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.76.1",
+    "@supabase/supabase-js": "^2.39.0",
+    "firebase": "^12.6.0",
     "framer-motion": "^12.23.24",
     "mixpanel-browser": "^2.71.1",
     "next": "16.0.0",

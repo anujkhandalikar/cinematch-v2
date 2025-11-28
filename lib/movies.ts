@@ -14,6 +14,7 @@ import { loadMoviesProgressively, getCachedMovies } from './movieCache';
 import { streamDiscoverAll, streamLanguageAll, fetchLanguageSeed } from './ingestion';
 import { getMoodCardId } from './movieCards';
 import { movieCardService } from './supabase';
+import { getCachedMoodCard, setCachedMoodCard } from './moodCardCache';
 
 // Seeded random number generator for deterministic shuffling
 function seededRandom(seed: number) {
@@ -73,30 +74,39 @@ export async function fetchFilteredMovies(preferences: {
     // NEW: Check if mood preset is selected - use Supabase pre-stored movies
     const cardId = getMoodCardId(preferences);
     if (cardId) {
-      console.log(`🎬 Mood preset selected: ${cardId} - fetching from Supabase`);
+      console.log(`🎬 Mood preset selected: ${cardId} - checking cache first`);
       
-      const movieCard = await movieCardService.getMovieCard(cardId);
+      // Check cache first for instant return
+      let movieCard = getCachedMoodCard(cardId);
+      
+      if (!movieCard) {
+        console.log(`   Cache miss - fetching from Supabase...`);
+        movieCard = await movieCardService.getMovieCard(cardId);
+        
+        // Cache the result for future use
+        if (movieCard) {
+          setCachedMoodCard(cardId, movieCard);
+        }
+      }
+      
       if (movieCard && Array.isArray(movieCard.movies) && movieCard.movies.length > 0) {
         console.log(`✅ Found ${movieCard.movies.length} pre-stored movies for ${cardId}`);
         
-        // Apply additional filters to the 100 pre-stored movies
-        const filtered = filterMovies(movieCard.movies as Movie[], {
-          genres: preferences.genres,
-          ottPlatforms: preferences.ottPlatforms,
-          languages: preferences.languages,
-          adultContent: preferences.adultContent,
-          releaseYear: preferences.releaseYear,
-          highRatedOnly: preferences.highRatedOnly,
-          releaseAfterMonths: preferences.releaseAfterMonths,
-          moodIncludeGenres: preferences.moodIncludeGenres,
-          moodExcludeGenres: preferences.moodExcludeGenres,
-          moodPreset: preferences.moodPreset,
-        });
+        // Mood cards are pre-curated and should be used as-is without any filtering
+        // The mood card already contains the right movies for that mood, so we return
+        // all movies directly without applying any filters
+        const allMovies = movieCard.movies as Movie[];
         
-        console.log(`✅ Filtered to ${filtered.length} movies after applying additional filters`);
-        onProgress?.(filtered, false);
-        onProgress?.(filtered, true);
-        return filtered;
+        console.log(`✅ Returning all ${allMovies.length} movies from mood card (no filters applied)`);
+        
+        // For mood cards, immediately show all movies (no progressive loading)
+        // Call onProgress with complete=true immediately to show movies instantly
+        // This bypasses all accumulation logic and shows movies synchronously from cache
+        if (onProgress && allMovies.length > 0) {
+          // Show movies immediately - no delay, no accumulation
+          onProgress(allMovies, true); // Mark as complete immediately
+        }
+        return allMovies;
       } else {
         console.warn(`⚠️ No pre-stored movies found for ${cardId} - returning empty array`);
         onProgress?.([], true);

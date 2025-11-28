@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useStore } from '@/lib/store';
 import { Movie } from '@/lib/store';
-import { supabase, testSupabaseConnection } from '@/lib/supabase';
+import { testSupabaseConnection, supabase } from '@/lib/supabase';
 import { trackEvent } from '@/lib/tracking';
+import { fetchFilteredMovies, filterMovies } from '@/lib/movies';
 
 const TIMER_DURATION = 180000; // 3 minutes in milliseconds
 
@@ -45,6 +46,12 @@ export default function SwipeDeck() {
   const [isExiting, setIsExiting] = useState(false);
   const [pendingSwipe, setPendingSwipe] = useState<'right' | 'left' | null>(null);
   const exitDirectionRef = useRef<'right' | 'left' | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const hasLoadedMoreRef = useRef(false); // Track if we've already loaded more movies
+  
+  // Pagination constants
+  const PAGINATION_THRESHOLD = 50; // Load more when user reaches this index
+  const PAGINATION_BATCH_SIZE = 100; // Load this many more movies
   
   // Framer Motion values for smooth animations
   const x = useMotionValue(0);
@@ -280,10 +287,16 @@ export default function SwipeDeck() {
 
   // Handle right swipe (like) - mode-specific logic
   const handleSwipeRight = async () => {
-    if (!currentMovie || hasLikedCurrentMovie) {
-      console.log('Cannot like: no movie or already liked');
+    if (!currentMovie || hasLikedCurrentMovie || isExiting) {
+      console.log('Cannot like: no movie or already liked or exiting');
       return;
     }
+    
+    // Set exiting state immediately to prevent duplicate likes
+    setIsExiting(true);
+    setPendingSwipe('right');
+    exitDirectionRef.current = 'right';
+    setHasLikedCurrentMovie(true);
     
     trackEvent({ 
       event: 'Movie_Swiped', 
@@ -291,152 +304,162 @@ export default function SwipeDeck() {
       title: currentMovie.title 
     });
     
-    setHasLikedCurrentMovie(true);
     addLikedMovie(currentMovie); // Add to global liked movies for display
     
-    if (session?.mode === 'dual') {
-      // DUAL MODE: Follow the flow diagram logic
-      console.log('=== USER LIKED MOVIE (DUAL MODE) ===');
-      console.log('Movie:', currentMovie.title);
-      console.log('Movie ID:', currentMovie.id);
-      console.log('Current userLiked:', userLiked.map(m => m.title));
-      console.log('Current partnerLiked:', partnerLiked.map(m => m.title));
-      
-      const newUserLiked = [...userLiked, currentMovie];
-      setUserLiked(newUserLiked);
-      console.log('Updated userLiked:', newUserLiked.map(m => m.title));
-      
-      // Sync with partner via Supabase
-      if (session?.supabaseSession) {
-        try {
-          console.log('Syncing movie like with Supabase...');
-          console.log('Movie:', currentMovie.title, 'ID:', currentMovie.id);
-          console.log('Session ID:', session.supabaseSession.id);
-          console.log('User ID:', session.userId);
-          await addMovieLike(currentMovie);
-          console.log('✅ Movie like synced with partner via Supabase');
-        } catch (error: any) {
-          console.error('❌ Error syncing movie like:', error);
-          console.error('Error details:', {
-            message: error?.message,
-            code: error?.code,
-            details: error?.details,
-            hint: error?.hint
+    // Start async operations but don't wait for them before advancing
+    const processLike = async () => {
+      if (session?.mode === 'dual') {
+        // DUAL MODE: Follow the flow diagram logic
+        console.log('=== USER LIKED MOVIE (DUAL MODE) ===');
+        console.log('Movie:', currentMovie.title);
+        console.log('Movie ID:', currentMovie.id);
+        console.log('Current userLiked:', userLiked.map(m => m.title));
+        console.log('Current partnerLiked:', partnerLiked.map(m => m.title));
+        
+        const newUserLiked = [...userLiked, currentMovie];
+        setUserLiked(newUserLiked);
+        console.log('Updated userLiked:', newUserLiked.map(m => m.title));
+        
+        // Sync with partner via Firebase
+        if (session?.supabaseSession) {
+          try {
+            console.log('Syncing movie like with Firebase...');
+            console.log('Movie:', currentMovie.title, 'ID:', currentMovie.id);
+            console.log('Session ID:', session.supabaseSession.id);
+            console.log('User ID:', session.userId);
+            await addMovieLike(currentMovie);
+            console.log('✅ Movie like synced with partner via Firebase');
+          } catch (error: any) {
+            console.error('❌ Error syncing movie like:', error);
+            console.error('Error details:', {
+              message: error?.message,
+              code: error?.code,
+              details: error?.details
+            });
+            // Continue even if Firebase fails - mutual matches can still work via polling
+            console.warn('⚠️ Continuing without Firebase sync - will use polling fallback');
+          }
+        } else {
+          console.warn('⚠️ No Firebase session - mutual matches will not sync');
+        }
+        
+        // Also check if this movie is already in mutualLiked to prevent duplicates
+        const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
+        
+        // Check for mutuality - use local state for fallback mode, Firebase for Firebase mode
+        let isMutual = false;
+        
+        // First check local state (works in both modes)
+        const partnerHasLiked = partnerLiked.some(movie => movie.id === currentMovie.id);
+        if (partnerHasLiked) {
+          console.log('✅ Partner already liked this movie (from local state):', currentMovie.title);
+          isMutual = true;
+        }
+        
+        // Also check Firebase if available (for real-time sync)
+        if (!isMutual && session?.supabaseSession && session?.userId) {
+          try {
+            console.log('🔍🔍🔍 CHECKING FOR MUTUALITY IN DATABASE 🔍🔍🔍');
+            console.log('Movie:', currentMovie.title);
+            console.log('Movie ID:', currentMovie.id);
+            console.log('Session ID:', session.supabaseSession.id);
+            console.log('Current User ID:', session.userId);
+            
+            const { data } = await supabase
+              .from('movie_likes')
+              .select('*')
+              .eq('session_id', session.supabaseSession.id)
+              .neq('user_id', session.userId) // Only get partner's likes
+              .eq('movie_id', currentMovie.id.toString());
+            
+            console.log('Partner likes for this movie from DB:', data?.length || 0);
+            if (data && data.length > 0) {
+              console.log('Partner liked IDs from DB:', data.map(l => l.user_id));
+            }
+            
+            // Check if partner has liked this movie
+            isMutual = !!(data && data.length > 0);
+            console.log('Is mutual?', isMutual);
+          } catch (err) {
+            console.warn('Error checking mutuality in database (using fallback):', err);
+            // In fallback mode, rely on local state check above
+          }
+        }
+        
+        if (isMutual && !alreadyMutual) {
+          console.log('🎉 MUTUAL MATCH FOUND:', currentMovie.title);
+          const newMutualLiked = [...mutualLiked, currentMovie];
+          setMutualLiked(newMutualLiked);
+          
+          // Defer all state updates to avoid React render errors
+          setTimeout(() => {
+            // Update session with mutual likes - CRITICAL: This must be called to persist mutual matches
+            console.log('💾 STORING MUTUAL MATCHES IN SESSION:', newMutualLiked.length, 'matches');
+            console.log('💾 Mutual match movies:', newMutualLiked.map(m => ({ title: m.title, id: m.id })));
+            setDualModeState({ mutualLikes: newMutualLiked });
+            
+            // Verify it was stored
+            const storedSession = useStore.getState().session;
+            console.log('✅ VERIFIED: Session mutualLikes count:', storedSession?.mutualLikes?.length || 0);
+            console.log('✅ VERIFIED: Session mutualLikes:', storedSession?.mutualLikes?.map((m: Movie) => ({ title: m.title, id: m.id })) || []);
+            
+            // Increment the counter
+            incrementNewMutualSinceNudge();
+            
+            // Read the new value from store
+            const updatedValue = useStore.getState().newMutualSinceNudge;
+            
+            console.log('Mutual match added:', {
+              movie: currentMovie.title,
+              mutualCount: newMutualLiked.length,
+              newMutualSinceNudge: updatedValue
+            });
+            
+            // Check if we should show nudge after incrementing
+            if (updatedValue >= 3) {
+              console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached');
+              setTimeout(() => {
+                setShowNudgeModal(true);
+              }, 500);
+            }
+          }, 0);
+        } else if (!isMutual) {
+          console.log('Not a mutual match yet, waiting for partner to like:', currentMovie.title);
+          console.log('Debug info:', {
+            partnerLikedCount: partnerLiked.length,
+            partnerLikedIds: partnerLiked.map(m => m.id),
+            currentMovieId: currentMovie.id,
+            partnerHasLiked: partnerLiked.some(movie => movie.id === currentMovie.id)
           });
-          // Continue even if Supabase fails - mutual matches can still work via polling
-          console.warn('⚠️ Continuing without Supabase sync - will use polling fallback');
+        } else if (alreadyMutual) {
+          console.log('Movie already marked as mutual, skipping');
         }
       } else {
-        console.warn('⚠️ No Supabase session - mutual matches will not sync');
-      }
-      
-      // Also check if this movie is already in mutualLiked to prevent duplicates
-      const alreadyMutual = mutualLiked.some(movie => movie.id === currentMovie.id);
-      
-      // Check for mutuality - use local state for fallback mode, Supabase for Supabase mode
-      let isMutual = false;
-      
-      // First check local state (works in both modes)
-      const partnerHasLiked = partnerLiked.some(movie => movie.id === currentMovie.id);
-      if (partnerHasLiked) {
-        console.log('✅ Partner already liked this movie (from local state):', currentMovie.title);
-        isMutual = true;
-      }
-      
-      // Also check Supabase if available (for real-time sync)
-      if (!isMutual && session?.supabaseSession && session?.userId) {
-        try {
-          console.log('🔍🔍🔍 CHECKING FOR MUTUALITY IN DATABASE 🔍🔍🔍');
-          console.log('Movie:', currentMovie.title);
-          console.log('Movie ID:', currentMovie.id);
-          console.log('Session ID:', session.supabaseSession.id);
-          console.log('Current User ID:', session.userId);
-          
-          const { data } = await supabase
-            .from('movie_likes')
-            .select('*')
-            .eq('session_id', session.supabaseSession.id)
-            .neq('user_id', session.userId) // Only get partner's likes
-            .eq('movie_id', currentMovie.id.toString());
-          
-          console.log('Partner likes for this movie from DB:', data?.length || 0);
-          if (data && data.length > 0) {
-            console.log('Partner liked IDs from DB:', data.map(l => l.user_id));
-          }
-          
-          // Check if partner has liked this movie
-          isMutual = !!(data && data.length > 0);
-          console.log('Is mutual?', isMutual);
-        } catch (err) {
-          console.warn('Error checking mutuality in database (using fallback):', err);
-          // In fallback mode, rely on local state check above
+        // SINGLE MODE: Simple individual likes counter
+        console.log('RIGHT SWIPE (SINGLE) - liked:', currentMovie.title);
+        incrementNewLikesSinceNudge();
+        
+        if (newLikesSinceNudge + 1 >= 3) {
+          console.log('NUDGE TRIGGER: 3 individual likes reached');
+          setTimeout(() => {
+            setShowNudgeModal(true);
+          }, 500);
         }
       }
-      
-      if (isMutual && !alreadyMutual) {
-        console.log('🎉 MUTUAL MATCH FOUND:', currentMovie.title);
-        const newMutualLiked = [...mutualLiked, currentMovie];
-        setMutualLiked(newMutualLiked);
-        
-        // Defer all state updates to avoid React render errors
-        setTimeout(() => {
-          // Update session with mutual likes - CRITICAL: This must be called to persist mutual matches
-          console.log('💾 STORING MUTUAL MATCHES IN SESSION:', newMutualLiked.length, 'matches');
-          console.log('💾 Mutual match movies:', newMutualLiked.map(m => ({ title: m.title, id: m.id })));
-          setDualModeState({ mutualLikes: newMutualLiked });
-          
-          // Verify it was stored
-          const storedSession = useStore.getState().session;
-          console.log('✅ VERIFIED: Session mutualLikes count:', storedSession?.mutualLikes?.length || 0);
-          console.log('✅ VERIFIED: Session mutualLikes:', storedSession?.mutualLikes?.map((m: Movie) => ({ title: m.title, id: m.id })) || []);
-          
-          // Increment the counter
-          incrementNewMutualSinceNudge();
-          
-          // Read the new value from store
-          const updatedValue = useStore.getState().newMutualSinceNudge;
-          
-          console.log('Mutual match added:', {
-            movie: currentMovie.title,
-            mutualCount: newMutualLiked.length,
-            newMutualSinceNudge: updatedValue
-          });
-          
-          // Check if we should show nudge after incrementing
-          if (updatedValue >= 3) {
-            console.log('🚨 NUDGE TRIGGER: 3 mutual matches reached');
-            setTimeout(() => {
-              setShowNudgeModal(true);
-            }, 500);
-          }
-        }, 0);
-      } else if (!isMutual) {
-        console.log('Not a mutual match yet, waiting for partner to like:', currentMovie.title);
-        console.log('Debug info:', {
-          partnerLikedCount: partnerLiked.length,
-          partnerLikedIds: partnerLiked.map(m => m.id),
-          currentMovieId: currentMovie.id,
-          partnerHasLiked: partnerLiked.some(movie => movie.id === currentMovie.id)
-        });
-      } else if (alreadyMutual) {
-        console.log('Movie already marked as mutual, skipping');
-      }
-    } else {
-      // SINGLE MODE: Simple individual likes counter
-      console.log('RIGHT SWIPE (SINGLE) - liked:', currentMovie.title);
-      incrementNewLikesSinceNudge();
-      
-      if (newLikesSinceNudge + 1 >= 3) {
-        console.log('NUDGE TRIGGER: 3 individual likes reached');
-        setTimeout(() => {
-          setShowNudgeModal(true);
-        }, 500);
-      }
-    }
+    };
+    
+    // Process like in background (don't block UI)
+    processLike().catch(err => {
+      console.error('Error processing like:', err);
+    });
     
     // Reset description expansion when moving to next movie
     setIsDescriptionExpanded(false);
+    
+    // Advance to next movie immediately (don't wait for async operations)
     nextMovie();
+    
+    // Check end conditions after advancing
     if (checkEndConditions()) {
       return;
     }
@@ -876,16 +899,10 @@ export default function SwipeDeck() {
               fullError: error
             });
             
-            // Check if it's a table not found error
-            if (error.code === 'PGRST205' || error.message?.includes('Could not find the table')) {
-              console.error('❌ TABLE NOT FOUND: movie_likes table does not exist in Supabase');
-              console.error('   Please create the table using the SQL schema in SUPABASE_SETUP.md');
-            }
-            
-            // Check if it's a permission error
-            if (error.code === '42501' || error.message?.includes('permission denied')) {
-              console.error('❌ PERMISSION DENIED: Check Row Level Security (RLS) policies');
-              console.error('   The anon key may not have permission to read movie_likes');
+            // Handle Firestore errors (different error format)
+            if (error?.code === 'permission-denied') {
+              console.error('❌ PERMISSION DENIED: Check Firestore security rules');
+              console.error('   The rules may not allow reading movie_likes');
             }
             
             // Don't return - continue with empty array to allow retry
@@ -1277,6 +1294,74 @@ export default function SwipeDeck() {
     setSwipeDelta({ x: 0, y: 0 });
   }, [currentMovieIndex]);
 
+  // Pagination: Load more movies when user approaches the threshold
+  useEffect(() => {
+    // Only paginate if we have movies and haven't already loaded more
+    if (!isLoadingMore && 
+        movies.length > 0 && 
+        currentMovieIndex >= PAGINATION_THRESHOLD && 
+        !hasLoadedMoreRef.current &&
+        session) {
+      
+      console.log(`📥 Pagination triggered: user at index ${currentMovieIndex}, loading ${PAGINATION_BATCH_SIZE} more movies...`);
+      setIsLoadingMore(true);
+      hasLoadedMoreRef.current = true;
+      
+      // Get preferences from session (combined for dual mode, individual for single mode)
+      const preferences = session.mode === 'dual' 
+        ? session.combinedPreferences || session.creatorPreferences
+        : session.creatorPreferences;
+      
+      if (!preferences) {
+        console.warn('⚠️ Cannot load more movies - no preferences available');
+        setIsLoadingMore(false);
+        return;
+      }
+      
+      // Get seed from session for deterministic ordering
+      const seed = session.seed || Math.random();
+      
+      // Fetch more movies using the same preferences and seed
+      fetchFilteredMovies({
+        genres: preferences.genres || [],
+        ottPlatforms: preferences.ottPlatforms || [],
+        languages: preferences.languages || [],
+        adultContent: preferences.adultContent || false,
+        highRatedOnly: preferences.highRatedOnly || false,
+        releaseYear: preferences.releaseYear || null,
+        imdbTop250Movies: preferences.imdbTop250Movies || false,
+        releaseAfterMonths: preferences.releaseAfterMonths || null,
+        moodIncludeGenres: preferences.moodIncludeGenres || [],
+        moodExcludeGenres: preferences.moodExcludeGenres || [],
+        moodPreset: preferences.moodPreset || null,
+      }, (newMovies, isComplete) => {
+        if (isComplete && newMovies.length > 0) {
+          // Filter out movies we already have
+          const existingIds = new Set(movies.map(m => m.id));
+          const uniqueNewMovies = newMovies.filter(m => !existingIds.has(m.id));
+          
+          // Apply same filtering/shuffling as initial load for consistency
+          const filtered = filterMovies(uniqueNewMovies, preferences, seed);
+          const nextBatch = filtered.slice(0, PAGINATION_BATCH_SIZE);
+          
+          if (nextBatch.length > 0) {
+            // Append to existing movies
+            const appendMovies = useStore.getState().appendMovies;
+            appendMovies(nextBatch);
+            
+            console.log(`✅ Pagination complete: Added ${nextBatch.length} more movies (total: ${movies.length + nextBatch.length})`);
+          } else {
+            console.warn('⚠️ No new movies found for pagination');
+          }
+          setIsLoadingMore(false);
+        }
+      }).catch((error) => {
+        console.error('❌ Error loading more movies:', error);
+        setIsLoadingMore(false);
+      });
+    }
+  }, [currentMovieIndex, movies.length, isLoadingMore, session]);
+
   // Show loading or end state
   if (!currentMovie || currentMovieIndex >= movies.length) {
     return (
@@ -1340,6 +1425,13 @@ export default function SwipeDeck() {
         </div>
       )}
 
+      {/* Movies Loaded Counter - Temporary debug feature */}
+      <div className="w-full bg-blue-600/20 border-b border-blue-500/30 px-4 py-1.5 text-center">
+        <p className="text-blue-300 text-xs font-semibold">
+          # movies loaded: <span className="text-blue-100 font-bold">{movies.length}</span>
+        </p>
+      </div>
+
       {/* Header - Make likes and timer more visible */}
       <div className="flex justify-between items-center p-2 bg-black/90 backdrop-blur-sm border-b border-gray-800" style={{ minHeight: 'fit-content' }}>
         <div className="text-white font-bold text-sm bg-red-600 px-3 py-1.5 rounded-full">
@@ -1394,8 +1486,8 @@ export default function SwipeDeck() {
           WebkitOverflowScrolling: 'touch'
         }}
       >
-        {/* Next Card Preview (Stacking Effect) */}
-        {nextMoviePreview && (
+        {/* Next Card Preview (Stacking Effect) - Only show when not dragging/swiping */}
+        {nextMoviePreview && !isDragging && !isExiting && (
           <div
             className="absolute w-full max-w-[95%] sm:max-w-[399px] mx-auto"
             style={{
@@ -1473,11 +1565,12 @@ export default function SwipeDeck() {
                   setSwipeDelta({ x: 0, y: 0 });
                 }
               }}
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20, rotate: 0 }}
             animate={{ 
               scale: 1, 
               y: 0,
-              opacity: 1
+              opacity: 1,
+              rotate: 0
             }}
             exit={{ 
               opacity: 0, 

@@ -46,7 +46,7 @@ export default function SessionScreen() {
     const timeoutId = setTimeout(() => {
       const elapsed = Date.now() - startTime;
       console.error(`⏱️ Session creation timeout after ${elapsed}ms - using fallback`);
-      setDiagnostics(`⏱️ Connection timed out. This usually means Supabase is unreachable from your network. Using offline mode (dual mode sync won't work, but single mode will).`);
+        setDiagnostics(`⏱️ Connection timed out. This usually means Firebase is unreachable from your network. Using offline mode (dual mode sync won't work, but single mode will).`);
       setIsCreating(false);
       createFallbackSession('dual', preferences);
       setCurrentScreen('ready');
@@ -73,11 +73,13 @@ export default function SessionScreen() {
                               supabaseError?.code === 'INVALID_API_KEY' ||
                               supabaseError?.message?.includes('Invalid Supabase API key') ||
                               supabaseError?.message?.includes('Supabase API key is missing');
-        const isTimeoutError = supabaseError?.message?.includes('timed out');
+        const isTimeoutError = supabaseError?.message?.includes('timed out') || 
+                               supabaseError?.code === 'TIMEOUT' ||
+                               supabaseError?.isTimeout;
         const isExpectedSupabaseFailure = isTableNotFound || isApiKeyError || isTimeoutError;
 
         const log = isExpectedSupabaseFailure ? console.warn : console.error;
-        const prefix = isExpectedSupabaseFailure ? '⚠️ Supabase session creation unavailable' : '❌ Supabase session creation failed';
+        const prefix = isExpectedSupabaseFailure ? '⚠️ Firebase session creation unavailable' : '❌ Firebase session creation failed';
         log(`${prefix} after ${elapsed}ms`, supabaseError);
 
         if (!isExpectedSupabaseFailure) {
@@ -88,16 +90,16 @@ export default function SessionScreen() {
         }
 
         if (isTimeoutError) {
-          setDiagnostics(`⏱️ Request timed out. Possible causes: network issue, Supabase service down, or firewall blocking connection.`);
+          setDiagnostics(`⏱️ Request timed out. Possible causes: network issue, Firebase service down, or firewall blocking connection.`);
         } else if (isTableNotFound) {
           setDiagnostics(`⚠️ Database tables not found. Using offline mode.`);
           console.log('⚠️ Table not found - using fallback (this is expected if tables are not set up)');
         } else if (isApiKeyError) {
-          setDiagnostics(`⚠️ Supabase API key missing or invalid. Using offline mode.`);
-          console.log('⚠️ Supabase API key issue detected - using fallback');
+          setDiagnostics(`⚠️ Firebase configuration missing or invalid. Using offline mode.`);
+          console.log('⚠️ Firebase configuration issue detected - using fallback');
         } else {
-          setDiagnostics(`⚠️ Supabase error: ${supabaseError?.message || 'Unknown error'}. Using offline mode.`);
-          console.warn('⚠️ Supabase failed, using fallback:', supabaseError?.message || supabaseError);
+          setDiagnostics(`⚠️ Firebase error: ${supabaseError?.message || 'Unknown error'}. Using offline mode.`);
+          console.warn('⚠️ Firebase failed, using fallback:', supabaseError?.message || supabaseError);
         }
         
         // Use fallback session
@@ -134,24 +136,91 @@ export default function SessionScreen() {
     
     setIsJoining(true);
     setError('');
+    setDiagnostics('');
+    
+    const startTime = Date.now();
+    
+    // Add timeout to prevent infinite hanging
+    const timeoutId = setTimeout(() => {
+      const elapsed = Date.now() - startTime;
+      console.error(`⏱️ Session join timeout after ${elapsed}ms - using fallback`);
+      setDiagnostics(`⏱️ Connection timed out. Using offline mode (dual mode sync won't work, but single mode will).`);
+      setIsJoining(false);
+      joinFallbackSession(sessionCode.trim(), preferences);
+      setCurrentScreen('ready');
+    }, 8000); // 8 second timeout (6s for query + 2s buffer)
+    
     try {
       // Try Supabase first, fallback to local if it fails
       try {
+        console.log('🔄 Attempting to join Supabase session...');
+        setDiagnostics('Connecting to Supabase...');
         await joinSupabaseSession(sessionCode.trim(), preferences);
-        console.log('Session joined with Supabase');
+        clearTimeout(timeoutId);
+        const elapsed = Date.now() - startTime;
+        console.log(`✅ Session joined with Supabase (${elapsed}ms)`);
+        setDiagnostics('');
+        setCurrentScreen('ready');
       } catch (supabaseError: any) {
-        // Only log if it's not a table not found error (we have fallback for that)
-        if (!supabaseError?.isTableNotFound && !supabaseError?.message?.includes('Table not found')) {
-          console.warn('Supabase failed, using fallback:', supabaseError?.message || supabaseError);
+        clearTimeout(timeoutId);
+        const elapsed = Date.now() - startTime;
+        
+        const isTableNotFound = supabaseError?.isTableNotFound || 
+                               supabaseError?.message?.includes('Table not found') ||
+                               supabaseError?.code === 'PGRST205';
+        const isApiKeyError = supabaseError?.isMissingApiKey ||
+                             supabaseError?.isInvalidApiKey ||
+                             supabaseError?.code === 'MISSING_API_KEY' ||
+                             supabaseError?.code === 'INVALID_API_KEY' ||
+                             supabaseError?.message?.includes('Invalid Supabase API key') ||
+                             supabaseError?.message?.includes('Supabase API key is missing');
+        const isTimeoutError = supabaseError?.message?.includes('timed out') || 
+                               supabaseError?.code === 'TIMEOUT' ||
+                               supabaseError?.isTimeout;
+        const isExpectedSupabaseFailure = isTableNotFound || isApiKeyError || isTimeoutError;
+
+        const log = isExpectedSupabaseFailure ? console.warn : console.error;
+        const prefix = isExpectedSupabaseFailure ? '⚠️ Supabase session join unavailable' : '❌ Supabase session join failed';
+        log(`${prefix} after ${elapsed}ms`, supabaseError);
+
+        if (isTimeoutError) {
+          setDiagnostics(`⏱️ Request timed out. Possible causes: network issue, Supabase service down, or firewall blocking connection.`);
+        } else if (isTableNotFound) {
+          setDiagnostics(`⚠️ Database tables not found. Using offline mode.`);
+          console.log('⚠️ Table not found - using fallback (this is expected if tables are not set up)');
+        } else if (isApiKeyError) {
+          setDiagnostics(`⚠️ Supabase configuration missing or invalid. Using offline mode.`);
+          console.log('⚠️ Supabase configuration issue detected - using fallback');
+        } else {
+          setDiagnostics(`⚠️ Supabase error: ${supabaseError?.message || 'Unknown error'}. Using offline mode.`);
+          console.warn('⚠️ Supabase failed, using fallback:', supabaseError?.message || supabaseError);
         }
+        
         // Use fallback session
+        console.log('🔄 Using fallback session...');
         joinFallbackSession(sessionCode.trim(), preferences);
+        setCurrentScreen('ready');
       }
-      setCurrentScreen('ready');
-    } catch (error) {
-      console.error('Error joining session:', error);
-      setError('Failed to join session. Please check the code and try again.');
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      const elapsed = Date.now() - startTime;
+      console.error(`❌ Error joining session after ${elapsed}ms:`, error);
+      console.error('   Error type:', typeof error);
+      console.error('   Error message:', error?.message);
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      setError(`Failed to join session: ${errorMessage}. Using offline mode.`);
+      setDiagnostics(`❌ Error: ${errorMessage}`);
+      // Still try to use fallback
+      try {
+        joinFallbackSession(sessionCode.trim(), preferences);
+        setCurrentScreen('ready');
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+        setError('Failed to join session. Please check the code and try again.');
+        setDiagnostics('❌ Fallback session join also failed.');
+      }
     } finally {
+      clearTimeout(timeoutId);
       setIsJoining(false);
     }
   };
@@ -199,7 +268,7 @@ export default function SessionScreen() {
                 onClick={testConnection}
                 disabled={isCreating}
                 className="bg-gray-700 text-gray-300 font-light py-4 px-6 rounded-full hover:bg-gray-600 transition-all duration-300 disabled:bg-gray-800 disabled:cursor-not-allowed text-sm"
-                title="Test Supabase connection"
+                title="Test Firebase connection"
               >
                 🔍 Test
               </button>
